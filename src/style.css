@@ -146,9 +146,21 @@ button, a, summary { touch-action: manipulation; }
 }
 .notebook-tabs [aria-current] { border-color: var(--sage); background: #dce3d5; box-shadow: inset 2px 2px 4px #303d3026; font-weight: 600; }
 
-.desk.course-desk, .masthead.course-masthead { width: min(1392px, calc(100% - 32px)); }
+body:has(> .course-desk) {
+  --course-gutter: clamp(.5rem, .8vw, 1rem);
+  display: grid;
+  grid-template: auto 1fr / minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.desk.course-desk, .masthead.course-masthead { width: calc(100% - 2 * var(--course-gutter)); }
 .masthead.course-masthead { min-height: 64px; }
-.desk.course-desk { min-height: 0; padding: clamp(.45rem, 1.35vw, 1.25rem); }
+.desk.course-desk {
+  align-items: stretch;
+  min-height: 0;
+  margin-bottom: var(--course-gutter);
+  padding: clamp(.45rem, 1.35vw, 1.25rem);
+}
 .course-desk .notebook { grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr); }
 .course-desk .leaf { padding: clamp(.9rem, 2vw, 2rem); }
 .course-desk .working { min-height: 0; font-size: clamp(1rem, 1.3vw, 1.15rem); }
@@ -299,8 +311,7 @@ button, a, summary { touch-action: manipulation; }
   .course-route { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 800px) {
-  .desk.course-desk, .masthead.course-masthead { width: calc(100% - 16px); }
-  .course-desk .notebook { grid-template-columns: minmax(0, 1fr); }
+  .course-desk .notebook { grid-template: auto 1fr / minmax(0, 1fr); }
   .course-desk .course-nav { padding-inline: .75rem; border-radius: 9px 9px 0 0; }
   .course-desk .working { border-top: 1px solid #a7a090; border-left: 0; border-radius: 0 0 9px 9px; box-shadow: inset 0 6px 10px -8px #433a31; }
   .course-desk .course-nav nav { grid-template-columns: .75fr .9fr 1fr 1.6fr .85fr; gap: .05rem; margin-top: .45rem; }
