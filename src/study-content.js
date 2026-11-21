@@ -1,6 +1,5 @@
 export const difficulties = { basico: 'Básico', intermedio: 'Intermedio', avanzado: 'Avanzado' }
 export const dimensions = { conceptual: 'Comprensión conceptual', procedimental: 'Procedimiento', aplicacion: 'Razonamiento y aplicación' }
-export const practiceTemplateCount = 4
 
 export const categories = {
   algebra: { title: 'Álgebra', competencies: ['manipulacion-algebraica', 'modelacion-matematica'] },

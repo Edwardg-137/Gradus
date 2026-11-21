@@ -45,7 +45,7 @@ export function home(progress, token, account) {
   <p>${account ? 'Tu avance se guarda en tu perfil.' : 'Tu sesión de invitado se guarda en este navegador.'}</p>${action}`
 }
 
-export function questionForm(question, token, action, { instanceId = question.id, value = '', error, canSkip = false } = {}) {
+export function questionForm(question, token, action, { instanceId = question.id, value = '', error, canSkip = false, extraFields = '' } = {}) {
   const errorMessage = error ? `<p class="error" id="error-respuesta" role="alert">${escape(error)}</p>` : ''
   const invalid = error ? 'aria-invalid="true" aria-describedby="error-respuesta"' : ''
   const options = question.format === 'choice'
@@ -53,7 +53,7 @@ export function questionForm(question, token, action, { instanceId = question.id
       <input type="radio" name="answer" value="${id}" ${value === id ? 'checked' : ''} ${invalid}> ${escape(label)}</label>`).join('')
     : `<label class="number">${escape(question.answerLabel ?? 'x =')} <input name="answer" inputmode="${question.answerLabel ? 'text' : 'decimal'}" autocomplete="off" spellcheck="false"
       value="${escape(value)}" ${invalid}></label>`
-  return form(token, action, `<input type="hidden" name="instance" value="${instanceId}">
+  return form(token, action, `${extraFields}<input type="hidden" name="instance" value="${instanceId}">
     <fieldset><legend>${escape(question.prompt)}</legend>${options}${errorMessage}</fieldset>
     <div class="actions"><button name="intent" value="answer">Enviar respuesta</button>
     ${canSkip ? '<button class="secondary" name="intent" value="skip">No lo sé todavía</button>' : ''}</div>`)

@@ -326,25 +326,36 @@ test('el banco clasifica las preguntas y conserva claves únicas en las variante
   assert.equal(grade(slope, '−8').outcome, 'correct')
 })
 
-test('las categorías enlazan todos sus niveles y la práctica corrige cada ejercicio como invitado', async t => {
+test('las categorías ofrecen ambas lecciones y el invitado retoma las ayudas y la corrección', async t => {
   const client = browserClient(await startServer(t))
   const study = await (await client.request('/estudio')).text()
   for (const [id, category] of Object.entries(categories)) {
     assert.ok(study.includes(category.title))
     const page = await (await client.request(`/estudio/categorias/${id}`)).text()
-    for (const competency of category.competencies) {
-      for (const difficulty of Object.keys(difficulties)) {
-        assert.ok(page.includes(`/estudio/competencias/${competency}/${difficulty}`))
-      }
-    }
+    for (const difficulty of Object.keys(difficulties)) assert.ok(page.includes(`/estudio/categorias/${id}/${difficulty}`))
+    for (const competency of category.competencies) assert.ok(page.includes(`/estudio/competencias/${competency}`))
   }
-  const path = '/estudio/competencias/manipulacion-algebraica/avanzado?ejercicio=3'
-  const html = await (await client.request(path)).text()
-  assert.match(html, /Ejemplo resuelto/)
-  const instance = instanceIn(html)
-  assert.equal((await client.post(path, { instance, answer: '11abc' })).status, 422)
-  const corrected = await client.post(path, { instance, answer: '11' })
-  assert.match(await corrected.text(), /Correcta/)
+  const choice = '/estudio/categorias/algebra/avanzado'
+  const modes = await (await client.request(choice)).text()
+  assert.match(modes, /Lección rápida[\s\S]+Lección completa/)
+  const path = `${choice}/completa`
+  assert.equal((await client.post(path, { intent: 'start' })).status, 303)
+  const intro = await (await client.request(path)).text()
+  assert.match(intro, /Paso 1 de 10 · Manipulación algebraica/)
+  assert.match(intro, /Ejemplo resuelto/)
+  assert.match(intro, /var\.alg\.exp\.factor-comun\.default\.yaml/)
+  const round = /name="round" value="([^"]+)"/.exec(intro)[1]
+  await client.post(path, { intent: 'next', round, step: '0' })
+  const problem = await (await client.request(path)).text()
+  assert.match(problem, /Factoriza por completo 8x² \+ 8x/)
+  const state = { round, step: '1', instance: instanceIn(problem) }
+  await client.post(path, { ...state, intent: 'hint' })
+  assert.match(await (await client.request(path)).text(), /Busca la menor potencia común/)
+  await client.post(path, { ...state, intent: 'answer', answer: 'b' })
+  await client.post(path, { ...state, intent: 'answer', answer: 'a' })
+  assert.match(await (await client.request(path)).text(), /Correcta/)
+  await client.post(path, { ...state, intent: 'next' })
+  assert.match(await (await client.request(path)).text(), /Paso 3 de 10/)
 })
 
 test('las dos pruebas cubren las dificultades y distinguen dominio, dimensiones y suficiencia', () => {

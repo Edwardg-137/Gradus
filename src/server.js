@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
-import { assessments, canStartFollowUp, grade, newBlock, nextQuestion, progressBadge, recordAnswer } from './assessment.js'
+import { assessments, canStartFollowUp, newBlock, nextQuestion, progressBadge, recordAnswer } from './assessment.js'
 import { credentials, digest, limitAuth, newSecret, protectPassword, verifyPassword } from './auth.js'
 import { catalog, coursePage } from './catalog-view.js'
 import { courses, modules } from './content.js'
@@ -10,10 +10,11 @@ import { answerExercise, findExercise, issueVariant, offersVariants, pendingExer
 import { practicePage } from './practice-view.js'
 import { credentialsPage, profilePage } from './profile-view.js'
 import { accountOwner, openStore, sessionMaxAge } from './store.js'
-import { difficulties, practiceTemplateCount, studyQuestion, studyScope } from './study-content.js'
+import { studyScope } from './study-content.js'
+import { advanceLesson, lessonKey } from './study-lessons.js'
 import { studyAttemptPage, studyTestOptions } from './study-test-view.js'
 import { competencyLevels, createStudyAttempt, submitStudyAnswer } from './study-tests.js'
-import { lessonPage, studyIndex, studyScopePage } from './study-view.js'
+import { lessonChooser, lessonPage, studyIndex, studyScopePage } from './study-view.js'
 import { assessmentQuestion, home, initialResult, layout, message } from './views.js'
 
 const css = readFileSync(new URL('./style.css', import.meta.url))
@@ -73,11 +74,8 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         [item.path, `${item.path}/iniciar`, `${item.path}/responder`].includes(pathname)) ?? []
       const [, moduleId, action] = /^\/modulos\/([a-z-]+)(?:\/(iniciar|responder|variante))?$/.exec(pathname) ?? []
       const module = Object.hasOwn(modules, moduleId) ? modules[moduleId] : null
-      const [, studyKind, studyId, difficulty, testType] = /^\/estudio\/(categorias|competencias)\/([a-z-]+)(?:\/([a-z]+)|\/pruebas\/(rapida|completa))?$/.exec(pathname) ?? []
+      const [, studyKind, studyId, difficulty, lessonMode, tests, testType] = /^\/estudio\/(categorias|competencias)\/([a-z-]+)(?:\/(basico|intermedio|avanzado)(?:\/(rapida|completa))?|(\/pruebas)(?:\/(rapida|completa))?)?$/.exec(pathname) ?? []
       const scope = studyScope(studyKind, studyId)
-      const lesson = scope?.lessons && Object.hasOwn(difficulties, difficulty) ? scope.lessons[difficulty] : null
-      const index = Number(searchParams.get('ejercicio')) - 1
-      const exercise = lesson && (!Number.isInteger(index) || index < 0 || index >= practiceTemplateCount ? 0 : index)
       const [, attemptId, answering] = /^\/pruebas\/([a-f\d-]{36})(\/responder)?$/.exec(pathname) ?? []
       if (request.method === 'GET' && pathname === '/estilos.css') {
         return response.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' }).end(css)
@@ -101,15 +99,21 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         if (login && !account) setCookie(response, authCookie, '', 0)
         const progress = store.read(owner)
         if (pathname === '/') return page(response, 'Inicio', home(progress, token, account))
-        if (pathname === '/perfil' || pathname === '/estudio' || (scope && !difficulty && !testType)) {
+        if (pathname === '/perfil' || pathname === '/estudio' || (scope && !difficulty)) {
           const attempts = account ? store.studyAttempts(account.id) : []
           if (pathname === '/perfil') return page(response, 'Mi perfil', profilePage(account, token, attempts))
           const levels = competencyLevels(attempts)
           if (pathname === '/estudio') return page(response, 'Estudio', studyIndex(levels))
-          return page(response, scope.title, studyScopePage(scope, levels, studyTestOptions(scope, account, attempts, token)))
+          if (testType) return redirect(response, `${scope.path}/pruebas`)
+          const options = studyTestOptions(scope, account, attempts, token)
+          if (tests) return page(response, 'Elige una prueba', `<p><a href="${scope.path}">${scope.title}</a></p><h1>Elige una prueba</h1>${options}`)
+          return page(response, scope.title, studyScopePage(scope, levels, options))
         }
-        if (lesson) return page(response, scope.title,
-          lessonPage(scope, difficulty, exercise, studyQuestion(scope.id, difficulty, exercise, 2 + exercise), token))
+        if (scope && difficulty) {
+          const body = lessonMode ? lessonPage(scope, difficulty, lessonMode,
+            progress.studyLessons?.[lessonKey(scope, difficulty, lessonMode)], token) : lessonChooser(scope, difficulty)
+          return page(response, scope.title, body)
+        }
         if (attemptId && !answering) {
           if (!account) return redirect(response, '/perfil')
           const attempt = store.readAttempt(account.id, attemptId)
@@ -177,13 +181,12 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         setCookie(response, authCookie, secret)
         return redirect(response, '/perfil')
       }
-      if (lesson) {
-        const question = studyQuestion(scope.id, difficulty, exercise, 2 + exercise)
-        if (data.get('instance') !== question.id) throw new RequestError(409, 'Abre la práctica para recuperar el ejercicio actual.')
-        const value = data.get('answer') ?? ''
-        const answer = grade(question, value)
-        return page(response, scope.title, lessonPage(scope, difficulty, exercise, question, token,
-          answer.error ? { value, error: answer.error } : { response: answer }), answer.error ? 422 : 200)
+      if (scope && difficulty) {
+        if (!lessonMode) return redirect(response, pathname)
+        const result = store.update(owner, progress => advanceLesson(progress, scope, difficulty, lessonMode, data))
+        if (result.error) return page(response, scope.title,
+          lessonPage(scope, difficulty, lessonMode, result.round, token, result), 422)
+        return redirect(response, pathname)
       }
       if (scope && testType) {
         if (!account) return redirect(response, '/perfil')
