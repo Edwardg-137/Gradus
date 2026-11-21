@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Escritorio de estudio · Gradus</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="desk.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#cuaderno">Saltar al cuaderno</a>
+  <header class="masthead"><strong>Gradus</strong><span>Escritorio de estudio · Demo</span></header>
+  <main class="desk" id="escritorio">
+    <article class="notebook" id="cuaderno" aria-labelledby="title" tabindex="-1">
+      <div class="leaf overview">
+        <p class="subject">Matemáticas</p>
+        <h1 id="title">Ecuaciones <br>lineales</h1>
+        <div class="bookmark">
+          <p>Diagnóstico inicial</p>
+          <strong>3/4 <span>aciertos</span></strong>
+          <div class="marks" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <p id="practice-progress">Práctica pendiente</p>
+        </div>
+      </div>
+      <div class="leaf working">
+        <div class="tabs" id="notebook-tabs" hidden>
+          <button id="results-tab" type="button">Resultado</button>
+          <button id="practice-tab" type="button">Práctica</button>
+        </div>
+        <section id="results" aria-labelledby="results-heading">
+          <h2 id="results-heading">Resultado</h2>
+          <div class="skill">
+            <div class="skill-title"><h3>Mantener la igualdad</h3><strong>2/2</strong></div>
+            <p class="mastered">Demostrada en esta evaluación</p>
+            <details><summary>Evidencia<span class="sr-only"> de mantener la igualdad</span></summary><p>−4 a ambos lados<br>x + 4 = 10 → x = 6</p></details>
+          </div>
+          <div class="skill">
+            <div class="skill-title"><h3>Resolver ecuaciones</h3><strong>1/2</strong></div>
+            <p>En desarrollo</p>
+            <details><summary>Evidencia<span class="sr-only"> de resolver ecuaciones</span></summary><p>Faltó dividir entre 3<br>3x = 12 → x = 4</p></details>
+          </div>
+          <button class="action" id="open-practice" type="button" hidden>Practicar despeje</button>
+        </section>
+        <section id="practice" aria-labelledby="practice-heading">
+          <h2 id="practice-heading">Despejar la incógnita</h2>
+          <p class="equation">2x + 3 = 11</p>
+          <form id="answer-form" hidden>
+            <label for="answer">Valor de <var>x</var></label>
+            <div class="answer-row"><input id="answer" type="text" inputmode="decimal" autocomplete="off" aria-describedby="feedback"><button class="action">Comprobar</button></div>
+          </form>
+          <p id="feedback" role="status"></p>
+          <noscript><p>Resta 3 a ambos lados y divide entre 2. El resultado es x = 4.</p></noscript>
+        </section>
+      </div>
+    </article>
+
+    <section class="clock" aria-labelledby="clock-title" hidden>
+      <h2 id="clock-title">Concentración</h2>
+      <div class="dial" id="dial">
+        <time id="clock-time" datetime="PT25M" role="timer" aria-live="off">25:00</time>
+      </div>
+      <div class="clock-buttons">
+        <button id="clock-toggle" type="button">Iniciar</button>
+        <button id="clock-reset" type="button" aria-label="Reiniciar reloj" title="Reiniciar reloj" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a8 8 0 1 1 2 6m-2-6V5m0 6h6"/></svg>
+        </button>
+      </div>
+      <p class="clock-status" id="clock-status" role="status"></p>
+    </section>
+
+    <section class="sticky" aria-labelledby="note-label" hidden>
+      <h2><label for="note" id="note-label">Nota adhesiva</label></h2>
+      <textarea id="note" rows="3" maxlength="240" placeholder="Para recordar…" aria-describedby="note-status"></textarea>
+      <p id="note-status"></p>
+    </section>
+
+    <div class="lamp-place" hidden>
+      <button class="lamp" id="lamp" type="button" aria-label="Lámpara de lectura" aria-pressed="true" title="Lámpara de lectura">
+        <svg viewBox="0 0 176 164" aria-hidden="true">
+          <path class="lamp-arm-shadow" d="M128 130 L137 67 L92 36"/>
+          <path class="lamp-arm" d="M128 130 L137 67 L92 36"/>
+          <circle class="lamp-joint" cx="137" cy="67" r="9"/>
+          <rect class="lamp-base" x="94" y="115" width="68" height="38" rx="18"/>
+          <circle class="lamp-switch" cx="129" cy="134" r="6"/>
+          <path class="lamp-shade" d="M82 20 Q102 35 100 59 L56 91 28 52 72 20 Q77 16 82 20Z"/>
+          <ellipse class="lamp-mouth" cx="42" cy="72" rx="11" ry="24" transform="rotate(-36 42 72)"/>
+        </svg>
+        <span>Lámpara</span>
+      </button>
+    </div>
+  </main>
+</body>
+</html>
