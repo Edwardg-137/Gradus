@@ -17,7 +17,7 @@ export function layout(title, body) {
 <body>
   <a class="skip" href="#contenido">Ir al contenido</a>
   <header><nav aria-label="Principal"><a class="brand" href="/">Gradus</a>
-    <a href="/catalogo">Catálogo</a><a href="/historial">Mi historial</a></nav></header>
+    <a href="/catalogo">Catálogo</a><a href="/historial">Mi historial</a><a href="/perfil">Mi perfil</a></nav></header>
   <main id="contenido" tabindex="-1">${body}</main>
 </body>
 </html>`
@@ -31,7 +31,7 @@ export function form(token, action, body) {
 export const button = label => `<button>${label}</button>`
 export const link = (url, label) => `<a class="button" href="${url}">${label}</a>`
 
-export function home(progress, token) {
+export function home(progress, token, account) {
   let action = form(token, '/evaluacion/iniciar', button('Medir mi punto de partida'))
   if (progress.followUp?.result) action = link('/historial', 'Ver mi historial')
   else if (progress.followUp) action = link('/reevaluacion', 'Retomar mi reevaluación')
@@ -42,7 +42,7 @@ export function home(progress, token) {
   <p>Descubre qué habilidades has demostrado y qué puedes practicar a continuación.</p>
   <ul><li>${skills.igualdad} con preguntas de selección múltiple.</li>
   <li>${skills.resolucion} escribiendo el valor de x.</li></ul>
-  <p>Tu sesión de invitado se guarda en este navegador.</p>${action}`
+  <p>${account ? 'Tu avance se guarda en tu perfil.' : 'Tu sesión de invitado se guarda en este navegador.'}</p>${action}`
 }
 
 export function questionForm(question, token, action, { instanceId = question.id, value = '', error, canSkip = false } = {}) {

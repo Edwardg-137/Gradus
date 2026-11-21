@@ -1,18 +1,20 @@
-import { createHash, randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
 import { assessments, canStartFollowUp, newBlock, nextQuestion, progressBadge, recordAnswer } from './assessment.js'
+import { credentials, digest, limitAuth, newSecret, protectPassword, verifyPassword } from './auth.js'
 import { catalog, coursePage } from './catalog-view.js'
 import { courses, modules } from './content.js'
 import { history } from './history-view.js'
 import { answerExercise, findExercise, issueVariant, offersVariants, pendingExercise, startRound } from './practice.js'
 import { practicePage } from './practice-view.js'
-import { openStore } from './store.js'
+import { credentialsPage, profilePage } from './profile-view.js'
+import { accountOwner, openStore, sessionMaxAge } from './store.js'
 import { assessmentQuestion, home, initialResult, layout, message } from './views.js'
 
 const css = readFileSync(new URL('./style.css', import.meta.url))
-const sessionCookie = 'gradus_guest'
+const guestCookie = 'gradus_guest'
+const authCookie = 'gradus_auth'
 
 class RequestError extends Error {
   constructor(status, message) {
@@ -52,6 +54,9 @@ function notFound(response) {
 
 export function createApp({ filename = 'data/gradus.sqlite', secureCookie = false } = {}) {
   const store = openStore(filename)
+  const attemptAuthentication = limitAuth()
+  const setCookie = (response, name, value, age = sessionMaxAge) => response.appendHeader('Set-Cookie',
+    `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secureCookie ? '; Secure' : ''}`)
   const server = createServer(async (request, response) => {
     response.setHeader('Cache-Control', 'no-store')
     response.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
@@ -69,16 +74,28 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       }
       if (request.method === 'GET' && pathname === '/favicon.ico') return response.writeHead(204).end()
 
-      const cookie = request.headers.cookie?.match(/(?:^|;\s*)gradus_guest=([0-9a-f]{64})(?=;|$)/)?.[1]
-      const session = cookie ?? randomBytes(32).toString('hex')
-      const token = createHash('sha256').update(`gradus-form:${session}`).digest('hex')
+      const matches = (request.headers.cookie ?? '').matchAll(/(?:^|;\s*)(gradus_guest|gradus_auth)=([0-9a-f]{64})(?=;|$)/g)
+      const cookies = Object.fromEntries(Array.from(matches, ([, name, value]) => [name, value]))
+      const guest = cookies[guestCookie] ?? newSecret()
+      const login = cookies[authCookie]
+      const loginId = login ? digest(login) : null
+      const data = request.method === 'POST' ? await formData(request) : null
+      const account = loginId ? store.accountForSession(loginId) : null
+      const owner = account ? accountOwner(account.id) : guest
+      const token = digest(`gradus-form:${account ? login : guest}`)
+      const registering = pathname === '/perfil/registro'
+      const credentialRoute = registering || pathname === '/perfil/entrar'
 
       if (request.method === 'GET') {
-        if (!cookie) {
-          response.setHeader('Set-Cookie', `${sessionCookie}=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secureCookie ? '; Secure' : ''}`)
+        if (!cookies[guestCookie]) setCookie(response, guestCookie, guest)
+        if (login && !account) setCookie(response, authCookie, '', 0)
+        const progress = store.read(owner)
+        if (pathname === '/') return page(response, 'Inicio', home(progress, token, account))
+        if (pathname === '/perfil') return page(response, 'Mi perfil', profilePage(account, token))
+        if (credentialRoute) {
+          if (account) return redirect(response, '/perfil')
+          return page(response, registering ? 'Crear perfil' : 'Iniciar sesión', credentialsPage(registering, token))
         }
-        const progress = store.read(session)
-        if (pathname === '/') return page(response, 'Inicio', home(progress, token))
         if (pathname === assessment?.path) {
           const block = progress[blockKey]
           if (!block) return redirect(response, blockKey === 'initial' ? '/' : '/resultado')
@@ -105,12 +122,40 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       }
 
       if (request.method !== 'POST') return notFound(response)
-      const data = await formData(request)
-      if (!cookie || data.get('token') !== token) {
-        throw new RequestError(403, 'Vuelve a abrir la página para recuperar tu sesión de invitado.')
+      if ((!cookies[guestCookie] && !account) || data.get('token') !== token) {
+        throw new RequestError(403, 'Vuelve a abrir la página para recuperar tu sesión.')
+      }
+      if (pathname === '/perfil/salir') {
+        if (account) store.revoke(loginId)
+        setCookie(response, authCookie, '', 0)
+        return redirect(response, '/perfil')
+      }
+      if (credentialRoute) {
+        if (account) return redirect(response, '/perfil')
+        const { email, password, error } = credentials(data)
+        const failure = (status, error) => page(response, registering ? 'Crear perfil' : 'Iniciar sesión',
+          credentialsPage(registering, token, { email, error }), status)
+        if (error) return failure(422, error)
+        const secret = newSecret()
+        const accepted = await attemptAuthentication(request.socket.remoteAddress, async () => {
+          if (registering) {
+            const { salt, passwordHash } = await protectPassword(password)
+            return store.register(email, salt, passwordHash, guest, digest(secret))
+          }
+          const candidate = store.findAccount(email)
+          if (!await verifyPassword(password, candidate)) return false
+          store.authorize(digest(secret), candidate.id)
+          return true
+        })
+        if (accepted === null) return failure(429, 'Hay demasiados intentos. Vuelve a intentarlo en unos minutos.')
+        if (!accepted) return registering
+          ? failure(409, 'Ese correo ya tiene un perfil. Puedes iniciar sesión.')
+          : failure(401, 'Revisa tu correo y contraseña.')
+        setCookie(response, authCookie, secret)
+        return redirect(response, '/perfil')
       }
       if (assessment && pathname === `${assessment.path}/iniciar`) {
-        const location = store.update(session, progress => {
+        const location = store.update(owner, progress => {
           if (blockKey === 'followUp' && !progress.followUp && !canStartFollowUp(progress)) return '/resultado'
           progress[blockKey] ??= newBlock()
           return assessment.path
@@ -120,7 +165,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       if (assessment && pathname === `${assessment.path}/responder`) {
         const instance = data.get('instance')
         const value = data.get('answer') ?? ''
-        const result = store.update(session, progress => {
+        const result = store.update(owner, progress => {
           const block = progress[blockKey]
           if (!block) return { location: assessment.path }
           if (block.result) return { location: assessment.resultPath }
@@ -139,7 +184,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         const path = `/modulos/${moduleId}`
         const previous = data.get('previous') ?? ''
         const value = data.get('answer') ?? ''
-        const result = store.update(session, progress => {
+        const result = store.update(owner, progress => {
           if (action === 'iniciar') {
             startRound(progress, moduleId, previous)
             return { location: path }

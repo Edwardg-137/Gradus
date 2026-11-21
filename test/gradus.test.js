@@ -240,3 +240,55 @@ test('la sesión de invitado se recupera después de reiniciar el servidor', asy
     assert.match(await (await student.get('/evaluacion')).text(), /Pregunta 3 de 4/)
   })
 })
+
+function browserClient(origin) {
+  const cookies = new Map()
+  const request = async (path, options) => {
+    const response = await fetch(`${origin}${path}`, {
+      ...options, redirect: 'manual', headers: { Cookie: [...cookies.values()].join('; '), ...options?.headers },
+    })
+    for (const value of response.headers.getSetCookie()) {
+      const [pair] = value.split(';')
+      const [name] = pair.split('=')
+      if (value.includes('Max-Age=0')) cookies.delete(name)
+      else cookies.set(name, pair)
+    }
+    return response
+  }
+  const post = async (path, fields = {}, source = path) => {
+    const html = await (await request(source)).text()
+    const token = /name="token" value="([^"]+)"/.exec(html)?.[1]
+    assert.ok(token, `Formulario en ${source}`)
+    return request(path, { method: 'POST', body: new URLSearchParams({ token, ...fields }) })
+  }
+  return { request, post, cookies }
+}
+
+test('el perfil migra el avance, aísla cuentas y permite volver a entrar desde otro navegador', async t => {
+  const origin = await startServer(t)
+  const first = browserClient(origin)
+  const account = { email: 'Estudiante@ejemplo.test ', password: 'una frase útil y larga' }
+  assert.equal((await first.post('/evaluacion/iniciar', {}, '/')).status, 303)
+  assert.equal((await first.post('/evaluacion/responder', { instance: 'i-aditiva', answer: 'ambos' }, '/evaluacion')).status, 303)
+  assert.equal((await first.post('/perfil/registro', { ...account, password: 'breve' })).status, 422)
+  const registration = await first.post('/perfil/registro', account)
+  assert.equal(registration.headers.get('location'), '/perfil')
+  assert.match(registration.headers.get('set-cookie'), /gradus_auth=.*HttpOnly; SameSite=Lax/)
+  assert.match(await (await first.request('/perfil')).text(), /estudiante@ejemplo.test/)
+  assert.match(await (await first.request('/evaluacion')).text(), /Pregunta 2 de 4/)
+
+  const second = browserClient(origin)
+  assert.equal((await second.request('/evaluacion')).headers.get('location'), '/')
+  assert.equal((await second.post('/perfil/registro', account)).status, 409)
+  assert.equal((await second.post('/perfil/entrar', { ...account, password: 'contraseña equivocada' })).status, 401)
+  assert.equal((await second.post('/perfil/entrar', account)).headers.get('location'), '/perfil')
+  assert.match(await (await second.request('/evaluacion')).text(), /Pregunta 2 de 4/)
+  assert.notEqual(first.cookies.get('gradus_auth'), second.cookies.get('gradus_auth'))
+
+  const revokedCookie = first.cookies.get('gradus_auth')
+  assert.equal((await first.post('/perfil/salir', {}, '/perfil')).status, 303)
+  assert.equal((await first.request('/evaluacion')).headers.get('location'), '/')
+  first.cookies.set('gradus_auth', revokedCookie)
+  assert.doesNotMatch(await (await first.request('/perfil')).text(), /estudiante@ejemplo.test/)
+  assert.match(await (await second.request('/evaluacion')).text(), /Pregunta 2 de 4/)
+})

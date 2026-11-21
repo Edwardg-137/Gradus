@@ -55,3 +55,6 @@ summary { cursor: pointer; }
 .comparison > div { padding: .65rem; border: 1px solid #dce1e8; border-radius: .35rem; }
 .comparison h3 { margin-block: 0 .5rem; font-size: 1rem; }
 .comparison p { margin-block: .5rem; }
+.fields { display: grid; gap: .65rem; max-width: 24rem; margin-bottom: 1rem; }
+.fields label { display: grid; gap: .25rem; font-weight: 600; }
+.fields input { min-width: 0; padding: .5rem; border: 1px solid #687587; border-radius: .3rem; }
