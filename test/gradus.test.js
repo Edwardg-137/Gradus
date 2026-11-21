@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import test from 'node:test'
-import { grade } from '../src/assessment.js'
+import { assessments, grade, newBlock, nextQuestion, progressBadge, recordAnswer } from '../src/assessment.js'
 import { followUp, initial, modules } from '../src/content.js'
+import { history } from '../src/history-view.js'
 import { issueVariant, practiceQuestion, variantPool } from '../src/practice.js'
 import { createApp } from '../src/server.js'
 
@@ -23,7 +24,8 @@ async function guest(origin, cookie) {
     method: 'POST', headers: { Cookie: cookie }, body: new URLSearchParams({ token, ...fields }), redirect: 'manual',
   })
   const answer = (instance, value, intent = 'answer') => post('/evaluacion/responder', { instance, answer: value, intent })
-  return { cookie, get, post, answer }
+  const reassess = (instance, value, intent = 'answer') => post('/reevaluacion/responder', { instance, answer: value, intent })
+  return { cookie, get, post, answer, reassess }
 }
 
 test('la calificación numérica compara el valor exacto y valida toda la respuesta', () => {
@@ -59,7 +61,7 @@ test('el diagnóstico oculta la corrección, retoma el bloque y adapta la compro
   assert.match(result, /Evidencia insuficiente/)
   assert.match(result, /Demostrada en esta evaluación/)
   assert.match(result, /Identificaste la transformación en la comprobación/)
-  assert.match(result, /Elegiste restar 4 solo en el lado izquierdo/)
+  assert.match(result, /Elegiste restar 4 solo al lado izquierdo/)
   assert.match(result, /0 de 2 respuestas correctas/)
 })
 
@@ -122,4 +124,73 @@ test('la práctica revisada conserva la corrección y emite variantes estables y
   const another = (await student.post(`${modulePath}/variante`, { previous: variantId })).headers.get('location')
   assert.notEqual(another, location)
   assert.doesNotMatch(await modulePage(another), new RegExp(`Resuelve ${a}x \\+ ${b} = ${c}\\.`))
+})
+
+test('el recorrido del hackathon desbloquea la reevaluación y guarda una insignia al mejorar', async t => {
+  const origin = await startServer(t)
+  const student = await guest(origin)
+  await student.post('/evaluacion/iniciar')
+  for (const [id, value] of initial.map((question, index) => [question.id, ['izquierda', 'ambos', '13', '5'][index]])) {
+    assert.equal((await student.answer(id, value)).status, 303)
+  }
+  await student.answer('i-comprobacion', 'izquierda')
+  assert.equal((await student.post('/reevaluacion/iniciar')).headers.get('location'), '/resultado')
+  assert.doesNotMatch(await (await student.get('/resultado')).text(), /Comprobar mi avance/)
+  assert.match(await (await student.get('/resultado')).text(), /dejaste el lado derecho en 9/)
+
+  const path = '/modulos/mantener-igualdad'
+  await student.post(`${path}/iniciar`)
+  for (const value of ['ambos', 'derecho', 'seis']) {
+    const instance = instanceIn(await (await student.get(path)).text())
+    assert.equal((await student.post(`${path}/responder`, { instance, answer: value })).status, 303)
+  }
+  assert.match(await (await student.get('/resultado')).text(), /Comprobar mi avance/)
+  assert.equal((await student.post('/reevaluacion/iniciar')).headers.get('location'), '/reevaluacion')
+  assert.equal((await student.reassess('i-aditiva', 'ambos')).status, 409)
+  for (const [index, question] of followUp.entries()) {
+    const form = await (await student.get('/reevaluacion')).text()
+    assert.equal(instanceIn(form), question.id)
+    assert.match(form, new RegExp(`Pregunta ${index + 1} de 4`))
+    assert.equal((await student.reassess(question.id, ['ambos', 'ambos', '15', '4'][index])).status, 303)
+  }
+
+  const completed = await (await student.get('/historial')).text()
+  assert.match(completed, /Antes[\s\S]+Después/)
+  assert.match(completed, /En desarrollo[\s\S]+Demostrada en esta evaluación/)
+  assert.match(completed, /Ver evidencia de mantener la igualdad/)
+  assert.match(completed, /Módulos practicados/)
+  assert.match(completed, /href="\/modulos\/despejar-incognita"/)
+  assert.equal((completed.match(/Avance en ecuaciones lineales/g) ?? []).length, 1)
+  assert.equal((await student.reassess('f-dos-pasos', '5')).headers.get('location'), '/historial')
+  assert.equal(await (await student.get('/historial')).text(), completed)
+  const another = await guest(origin)
+  assert.doesNotMatch(await (await another.get('/historial')).text(), /Avance en ecuaciones lineales/)
+})
+
+function finishedBlock(assessment, answers) {
+  const block = newBlock()
+  for (const value of answers) recordAnswer(block, assessment, nextQuestion(block, assessment), value, value === null)
+  return block
+}
+
+test('la insignia agrupa mejoras y distingue la evidencia nueva y los estados que se mantienen', () => {
+  for (const [index, question] of initial.entries()) {
+    assert.equal(question.skill, followUp[index].skill)
+    assert.equal(question.indicator, followUp[index].indicator)
+    assert.equal(question.format, followUp[index].format)
+    assert.notEqual(question.prompt, followUp[index].prompt)
+  }
+  const follow = finishedBlock(assessments.followUp, ['ambos', 'ambos', '15', '5'])
+  const partial = finishedBlock(assessments.initial, [null, 'ambos', '13', '4'])
+  const progress = { topicId: 'ecuaciones-lineales', initial: partial, followUp: follow }
+  assert.equal(progressBadge(progress), null)
+  assert.match(history(progress), /Evidencia nueva/)
+  assert.match(history(progress), /Pendiente\. Se obtiene/)
+
+  progress.initial = finishedBlock(assessments.initial, ['inversa', 'ambos', '13', '5'])
+  assert.equal(progressBadge(progress).evidence.length, 2)
+  progress.initial = finishedBlock(assessments.initial, ['inversa', 'inversa', '1', '5'])
+  progress.followUp = finishedBlock(assessments.followUp, ['izquierda', 'ambos', '15', '4'])
+  assert.equal(progressBadge(progress), null)
+  assert.match(history(progress), /Aumentaron los aciertos y el estado se mantiene/)
 })

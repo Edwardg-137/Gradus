@@ -2,8 +2,9 @@ import { createHash, randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
-import { newBlock, nextQuestion, recordAnswer } from './assessment.js'
+import { assessments, canStartFollowUp, newBlock, nextQuestion, progressBadge, recordAnswer } from './assessment.js'
 import { modules } from './content.js'
+import { history } from './history-view.js'
 import { answerExercise, findExercise, issueVariant, offersVariants, pendingExercise, startRound } from './practice.js'
 import { practicePage } from './practice-view.js'
 import { openStore } from './store.js'
@@ -58,6 +59,8 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
 
     try {
       const { pathname, searchParams } = new URL(request.url, 'http://localhost')
+      const [blockKey, assessment] = Object.entries(assessments).find(([, item]) =>
+        [item.path, `${item.path}/iniciar`, `${item.path}/responder`].includes(pathname)) ?? []
       const [, moduleId, action] = /^\/modulos\/([a-z-]+)(?:\/(iniciar|responder|variante))?$/.exec(pathname) ?? []
       const module = Object.hasOwn(modules, moduleId) ? modules[moduleId] : null
       if (request.method === 'GET' && pathname === '/estilos.css') {
@@ -74,15 +77,17 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         }
         const progress = store.read(session)
         if (pathname === '/') return page(response, 'Inicio', home(progress, token))
-        if (pathname === '/evaluacion') {
-          if (!progress.initial) return redirect(response, '/')
-          if (progress.initial.result) return redirect(response, '/resultado')
-          return page(response, 'Evaluación inicial', assessmentQuestion(nextQuestion(progress.initial), token))
+        if (pathname === assessment?.path) {
+          const block = progress[blockKey]
+          if (!block) return redirect(response, blockKey === 'initial' ? '/' : '/resultado')
+          if (block.result) return redirect(response, assessment.resultPath)
+          return page(response, assessment.title, assessmentQuestion(assessment, nextQuestion(block, assessment), token))
         }
         if (pathname === '/resultado') {
           if (!progress.initial?.result) return redirect(response, '/evaluacion')
-          return page(response, 'Tu punto de partida', initialResult(progress.initial))
+          return page(response, 'Tu punto de partida', initialResult(progress, token))
         }
+        if (pathname === '/historial') return page(response, 'Mi historial', history(progress))
         if (module && !action) {
           const practice = progress.practice?.[moduleId]
           const selected = findExercise(practice, searchParams.get('ejercicio'))
@@ -96,24 +101,31 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       if (!cookie || data.get('token') !== token) {
         throw new RequestError(403, 'Vuelve a abrir la página para recuperar tu sesión de invitado.')
       }
-      if (pathname === '/evaluacion/iniciar') {
-        store.update(session, progress => { progress.initial ??= newBlock() })
-        return redirect(response, '/evaluacion')
+      if (assessment && pathname === `${assessment.path}/iniciar`) {
+        const location = store.update(session, progress => {
+          if (blockKey === 'followUp' && !progress.followUp && !canStartFollowUp(progress)) return '/resultado'
+          progress[blockKey] ??= newBlock()
+          return assessment.path
+        })
+        return redirect(response, location)
       }
-      if (pathname === '/evaluacion/responder') {
+      if (assessment && pathname === `${assessment.path}/responder`) {
         const instance = data.get('instance')
         const value = data.get('answer') ?? ''
         const result = store.update(session, progress => {
-          const block = progress.initial
-          if (!block) return { location: '/' }
-          if (Object.hasOwn(block.answers, instance) || block.result) return { location: '/evaluacion' }
-          const question = nextQuestion(block)
+          const block = progress[blockKey]
+          if (!block) return { location: assessment.path }
+          if (block.result) return { location: assessment.resultPath }
+          if (Object.hasOwn(block.answers, instance)) return { location: assessment.path }
+          const question = nextQuestion(block, assessment)
           if (instance !== question.id) throw new RequestError(409, 'Abre tu evaluación para recuperar la pregunta actual.')
-          const answer = recordAnswer(block, question, value, data.get('intent') === 'skip')
-          return answer.error ? { question, error: answer.error } : { location: '/evaluacion' }
+          const answer = recordAnswer(block, assessment, question, value, data.get('intent') === 'skip')
+          if (answer.error) return { question, error: answer.error }
+          if (blockKey === 'followUp' && block.result) progress.badge = progressBadge(progress)
+          return { location: block.result ? assessment.resultPath : assessment.path }
         })
         if (result.location) return redirect(response, result.location)
-        return page(response, 'Evaluación inicial', assessmentQuestion(result.question, token, { value, error: result.error }), 422)
+        return page(response, assessment.title, assessmentQuestion(assessment, result.question, token, { value, error: result.error }), 422)
       }
       if (module && action) {
         const path = `/modulos/${moduleId}`

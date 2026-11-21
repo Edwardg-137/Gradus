@@ -1,5 +1,5 @@
-import { check, initial, modules, skills, topic } from './content.js'
-import { statusLabels } from './assessment.js'
+import { check, modules, skills, topic } from './content.js'
+import { assessmentQuestions, canStartFollowUp, statusLabels } from './assessment.js'
 
 const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
 export const escape = value => String(value).replace(/[&<>"']/g, char => entities[char])
@@ -31,9 +31,11 @@ export const button = label => `<button>${label}</button>`
 export const link = (url, label) => `<a class="button" href="${url}">${label}</a>`
 
 export function home(progress, token) {
-  const action = progress.initial?.result ? link('/resultado', 'Ver mi resultado')
-    : progress.initial ? link('/evaluacion', 'Retomar mi evaluación')
-      : form(token, '/evaluacion/iniciar', button('Medir mi punto de partida'))
+  let action = form(token, '/evaluacion/iniciar', button('Medir mi punto de partida'))
+  if (progress.followUp?.result) action = link('/historial', 'Ver mi historial')
+  else if (progress.followUp) action = link('/reevaluacion', 'Retomar mi reevaluación')
+  else if (progress.initial?.result) action = link('/resultado', 'Ver mi resultado')
+  else if (progress.initial) action = link('/evaluacion', 'Retomar mi evaluación')
   return `<p class="muted">${topic.area} / ${topic.domain}</p>
   <h1>${topic.title}</h1>
   <p>Descubre qué habilidades has demostrado y qué puedes practicar a continuación.</p>
@@ -56,11 +58,11 @@ export function questionForm(question, token, action, { instanceId = question.id
     ${canSkip ? '<button class="secondary" name="intent" value="skip">No lo sé todavía</button>' : ''}</div>`)
 }
 
-export function assessmentQuestion(question, token, input) {
-  const position = initial.indexOf(question)
-  const title = position < 0 ? 'Comprobación adicional' : `Pregunta ${position + 1} de ${initial.length}`
-  return `<p class="muted">Evaluación inicial · ${escape(skills[question.skill])}</p><h1>${title}</h1>
-  ${questionForm(question, token, '/evaluacion/responder', { ...input, canSkip: true })}`
+export function assessmentQuestion(assessment, question, token, input) {
+  const position = assessment.questions.indexOf(question)
+  const title = position < 0 ? 'Comprobación adicional' : `Pregunta ${position + 1} de ${assessment.questions.length}`
+  return `<p class="muted">${assessment.title} · ${escape(skills[question.skill])}</p><h1>${title}</h1>
+  ${questionForm(question, token, `${assessment.path}/responder`, { ...input, canSkip: true })}`
 }
 
 const outcomeLabels = { correct: 'Correcta', incorrect: 'Incorrecta', unknown: 'No lo sé todavía' }
@@ -73,30 +75,44 @@ export function feedback(question, response) {
 
 export function evidence(block, ids) {
   return `<ul class="evidence">${ids.map(id => {
-    const question = [...initial, check].find(item => item.id === id)
+    const question = assessmentQuestions.find(item => item.id === id)
     return `<li><p>${escape(question.prompt)}</p>${feedback(question, block.answers[id])}</li>`
   }).join('')}</ul>`
 }
 
-export function recommendation(result) {
+export function recommendation(result, primary = true) {
   const { moduleId, reason } = result.recommendation
+  const url = `/modulos/${moduleId}`
+  const title = modules[moduleId].title
   return `<section><h2>Práctica recomendada</h2><p>${escape(reason)}</p>
-  <p>${link(`/modulos/${moduleId}`, modules[moduleId].title)}</p></section>`
+  <p>${primary ? link(url, title) : `<a href="${url}">${title}</a>`}</p></section>`
 }
 
 export function score(result) {
   return `${result.correct} de ${result.evidence.length} respuestas correctas`
 }
 
-export function initialResult(block) {
+export function initialResult(progress, token) {
+  const block = progress.initial
   const { skills: results } = block.result
+  let next = ''
+  if (progress.followUp?.result) next = link('/historial', 'Ver mi historial')
+  else if (progress.followUp) next = link('/reevaluacion', 'Retomar mi reevaluación')
+  else if (canStartFollowUp(progress)) next = form(token, '/reevaluacion/iniciar', button('Comprobar mi avance'))
   return `<h1>Tu punto de partida</h1>
-  ${Object.entries(results).map(([id, result]) => `<section>
-    <h2>${escape(skills[id])}</h2><p><strong>${statusLabels[result.status]}</strong> · ${score(result)}</p>
-    <details><summary>Ver respuestas y explicaciones</summary>${evidence(block, result.evidence)}</details>
-  </section>`).join('')}
+  ${next}
+  ${Object.entries(results).map(([id, result]) => {
+    const exampleId = result.evidence.find(id => block.answers[id].outcome !== 'correct') ?? result.evidence[0]
+    const question = assessmentQuestions.find(item => item.id === exampleId)
+    const answer = block.answers[exampleId]
+    return `<section>
+      <h2>${escape(skills[id])}</h2><p><strong>${statusLabels[result.status]}</strong> · ${score(result)}</p>
+      <p>${escape(question.indicator)} · ${outcomeLabels[answer.outcome]}</p>
+      <details><summary>Ver respuestas y explicaciones</summary>${evidence(block, result.evidence)}</details>
+    </section>`
+  }).join('')}
   ${block.answers[check.id] ? `<details><summary>Ver comprobación adicional</summary>${evidence(block, [check.id])}</details>` : ''}
-  ${recommendation(block.result)}`
+  ${recommendation(block.result, !next)}`
 }
 
 export function message(title, description) {

@@ -51,3 +51,7 @@ summary { cursor: pointer; }
 .evidence { padding-inline-start: 1.5rem; }
 .evidence p { margin: .3rem 0; }
 .evidence li { margin-bottom: .85rem; }
+.comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.comparison > div { padding: .65rem; border: 1px solid #dce1e8; border-radius: .35rem; }
+.comparison h3 { margin-block: 0 .5rem; font-size: 1rem; }
+.comparison p { margin-block: .5rem; }
