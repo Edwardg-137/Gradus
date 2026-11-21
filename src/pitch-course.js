@@ -14,7 +14,7 @@ export const units = {
   modelacion: { title: 'Modelar una situación', concept: 'Define la incógnita y distingue los cargos que se pagan una vez de los que se repiten.',
     example: 'Si hay Q 12 de envío y cada cuaderno cuesta Q 8, la compra de x cuadernos cuesta 12 + 8x. Al pagar Q 52, x = 5.',
     evidence: 'Lucía identificó el costo fijo y la tarifa, y comprobó que su solución tenía sentido en el contexto.' },
-  integracion: { title: 'Resolver un problema integrador' },
+  integracion: { title: 'Resolver una compra', concept: 'Usa una ecuación para separar el costo de los kits, el forro y el envío.' },
 }
 
 function choice(prompt, options, key, explanation) {
@@ -68,7 +68,7 @@ export const followUpProblem = choice('En esta visita posterior, desarrolla −5
   { a: '−10x + 20', b: '−10x − 20', c: '−10x − 4' }, 'a',
   'Los productos son (−5)(2x) = −10x y (−5)(−4) = +20.')
 
-const proofOrder = ['respuesta', 'guiada', 'variante', 'autonoma', ...Object.keys(integrator), ...Object.keys(finalExam), 'retencion']
+const proofOrder = ['respuesta', 'guiada', 'variante', 'autonoma', ...Object.keys(integrator), ...Object.keys(finalExam), 'retencion', 'solicitud']
 const correct = response => response?.outcome === 'correct'
 
 export function pitchRun(params) {
@@ -95,9 +95,13 @@ export function pitchRun(params) {
   return { answers, initial, guide, guided, canCheck, independentProblem, alternate, autonomous, reviewDone, activity, courseDone, exam, score, followUp }
 }
 
-export function pitchUrl(run, scene, options = {}) {
+export function pitchLocation(run, scene, options = {}) {
   const query = new URLSearchParams(Object.entries({ escena: scene, ...run.answers, ...options }).filter(([, value]) => value !== ''))
-  return `/pitch?${escape(query.toString())}`
+  return `/pitch?${query}`
+}
+
+export function pitchUrl(run, scene, options = {}) {
+  return escape(pitchLocation(run, scene, options))
 }
 
 function questionField(name, question, value = '', error = '', position = 0) {
@@ -110,7 +114,9 @@ function questionField(name, question, value = '', error = '', position = 0) {
 
 export function pitchForm(run, scene, problems, marked, submit, options = {}) {
   const cutoff = proofOrder.indexOf(Object.keys(problems)[0])
-  const hidden = Object.fromEntries(proofOrder.slice(0, cutoff).filter(name => run.answers[name]).map(name => [name, run.answers[name]]))
+  const earlier = proofOrder.slice(0, cutoff)
+  if (scene === 'metas') earlier.push('solicitud')
+  const hidden = Object.fromEntries(earlier.filter(name => run.answers[name]).map(name => [name, run.answers[name]]))
   const exam = scene === 'examen'
   return `<form method="get" action="/pitch"${exam ? ' class="course-exam"' : ''}>${Object.entries({ escena: scene, ...hidden, ...options }).map(([name, value]) =>
     `<input type="hidden" name="${name}" value="${escape(value)}">`).join('')}
@@ -150,17 +156,17 @@ export function modulePage(run, id) {
   if (!run.reviewDone) return `<p class="course-status">Repaso previo pendiente</p>
     <p>Completa un ejercicio nuevo sin pista para abrir este módulo.</p>
     <p>${link(pitchUrl(run, 'practica'), 'Ir a Práctica')}</p>${back}`
-  return `<div class="course-example"><p>${context}</p></div>${run.courseDone ? `<h2>Actividad integradora superada</h2>
+  return `<div class="course-example"><p>${context}</p></div>${run.courseDone ? `<h2>Problema de compra resuelto</h2>
     ${Object.entries(integrator).map(([name, problem]) => `<p><strong>${escape(problem.prompt)}</strong></p>${pitchFeedback(problem, run.activity[name])}`).join('')}
     <p>${link(pitchUrl(run, 'examen'), 'Presentar examen final')}</p>` : `${Object.values(run.activity).some(response => response?.outcome === 'incorrect')
       ? '<p class="error" role="alert">Revisa cuántas veces se paga el forro y cuántas veces se paga el envío. Inténtalo de nuevo.</p>' : ''}
-      ${pitchForm(run, 'unidad', integrator, run.activity, 'Comprobar actividad', { unidad: id })}`}${back}`
+      ${pitchForm(run, 'unidad', integrator, run.activity, 'Comprobar solución', { unidad: id })}`}${back}`
 }
 
 export function examPage(run) {
-  if (!run.courseDone) return `<p class="pitch-callout">El examen se abre al completar la actividad integradora.</p><p>${link(pitchUrl(run, 'ruta'), 'Volver al mapa')}</p>`
+  if (!run.courseDone) return `<p class="pitch-callout">El examen se abre al resolver el problema de compra.</p><p>${link(pitchUrl(run, 'ruta'), 'Volver al mapa')}</p>`
   if (run.score === null) return `<p>Cinco problemas de 20 puntos sobre los temas del curso.</p>${pitchForm(run, 'examen', finalExam, run.exam, 'Calificar examen')}`
-  const clearExam = Object.fromEntries([...Object.keys(finalExam), 'retencion'].map(name => [name, '']))
+  const clearExam = Object.fromEntries([...Object.keys(finalExam), 'retencion', 'solicitud'].map(name => [name, '']))
   return `<p class="pitch-callout"><strong>${run.score} de 100</strong> en el examen final. ${run.score / 20} de 5 respuestas correctas.</p>
     <details><summary>Consultar respuestas y soluciones</summary><ol>${Object.entries(finalExam).map(([name, problem]) =>
       `<li><p>${escape(problem.prompt)}</p>${pitchFeedback(problem, run.exam[name])}</li>`).join('')}</ol></details>

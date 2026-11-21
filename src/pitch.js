@@ -1,7 +1,7 @@
 import { courseProgress, examPage, followUpProblem, initialProblem, modulePage, moduleStatus,
-  pitchFeedback, pitchForm, pitchRun, pitchUrl, units } from './pitch-course.js'
+  pitchFeedback, pitchForm, pitchLocation, pitchRun, pitchUrl, units } from './pitch-course.js'
 import { masteryProfiles, masteryStatus } from './study-mastery.js'
-import { link } from './views.js'
+import { escape, link } from './views.js'
 
 const at = '2026-11-21T17:00:00.000Z'
 const algebra = 'manipulacion-algebraica'
@@ -9,6 +9,11 @@ const equations = 'resolucion-ecuaciones'
 const modeling = 'modelacion-matematica'
 const course = 'Matemáticas para Bachillerato'
 const navigation = { inicio: 'Hoy', ruta: 'Mapa', practica: 'Práctica', curso: 'Curso', metas: 'Metas' }
+const stages = [
+  ['Bases de álgebra', ['fundamentos', 'distributiva']],
+  ['Ecuaciones y modelación', ['ecuaciones', 'modelacion', 'integracion']],
+  ['Evaluación', ['examen']],
+]
 
 function completed(competency, day) {
   return {
@@ -33,30 +38,32 @@ const formatDay = new Intl.DateTimeFormat('es-GT', { day: 'numeric', month: 'lon
 const mapEvidence = { ecuaciones: masteryStatus(learning[equations], at), modelacion: masteryStatus(learning[modeling], at) }
 
 function practiceTask(run) {
-  if (run.canCheck) return { title: 'Comprobación sin pista', detail: 'Resuelve una variante nueva para abrir la actividad integradora.',
+  if (run.canCheck) return { title: 'Comprobación sin pista', detail: 'Resuelve una variante nueva para desbloquear el problema de compra.',
     href: pitchUrl(run, 'repaso', { fase: 'autonoma' }), action: 'Continuar comprobación' }
   if (run.guide) return { title: run.guide.title, detail: 'Gradus eligió este refuerzo a partir de tu respuesta anterior.',
     href: pitchUrl(run, 'repaso', { fase: 'guiada' }), action: 'Continuar refuerzo' }
-  return { title: 'Repasar distributiva y signos', detail: 'La comprobación venció. Repasa esta base antes de la actividad integradora.',
+  return { title: 'Repasar distributiva y signos', detail: 'Ya toca comprobar cómo distribuyes un factor negativo.',
     href: pitchUrl(run, 'repaso'), action: 'Empezar repaso' }
 }
 
 function nextTask(run) {
   if (!run.reviewDone) return practiceTask(run)
-  if (!run.courseDone) return { title: 'Actividad integradora', detail: 'Aplica lo que aprendiste para modelar y resolver una compra.',
-    href: pitchUrl(run, 'unidad', { unidad: 'integracion' }), action: 'Abrir actividad' }
+  if (!run.courseDone) return { title: units.integracion.title, detail: units.integracion.concept,
+    href: pitchUrl(run, 'unidad', { unidad: 'integracion' }), action: 'Abrir problema de compra' }
   if (run.score === null) return { title: 'Examen final', detail: 'Completa cinco problemas para cerrar el curso.',
     href: pitchUrl(run, 'examen'), action: 'Abrir examen' }
   if (run.score < 75) return { title: 'Revisar el examen', detail: 'Consulta las soluciones antes de volver a presentarlo.',
     href: pitchUrl(run, 'examen'), action: 'Ver examen calificado' }
   if (run.score >= 90 && !run.followUp?.outcome) return { title: 'Comprobar retención', detail: 'Resuelve un problema nuevo de distributiva en una visita posterior.',
-    href: pitchUrl(run, 'metas', { seguimiento: 'si' }), action: 'Abrir seguimiento' }
+    href: pitchUrl(run, 'metas', { seguimiento: 'si' }) + '#seguimiento', action: 'Abrir seguimiento' }
   return { title: 'Resultado de ingreso', detail: 'Consulta tus metas, el puntaje y el estado de retención.',
     href: pitchUrl(run, 'metas'), action: 'Ver resultado de ingreso' }
 }
 
-function nextPanel(task) {
-  return `<section class="course-next"><h2>${task.title}</h2><p>${task.detail}</p><p>${link(task.href, task.action)}</p></section>`
+function nextPanel(task, label = '') {
+  return `<section class="course-next course-recommendation"${label ? ` aria-label="${label}"` : ''}>
+    <div><h2>${task.title}</h2><p>${task.detail}</p></div>
+    ${link(task.href, task.action)}</section>`
 }
 
 function today(run) {
@@ -69,26 +76,67 @@ function partnership(run) {
     <p><a href="${pitchUrl(run, 'curso')}">Volver al curso</a></p>`
 }
 
-function coursePage(run) {
-  return `<p>Programa de preparación para estudiantes de tercero básico.</p>
-    <h2>Objetivos</h2><ul><li>Transformar expresiones conservando su valor.</li><li>Resolver y comprobar ecuaciones con paréntesis.</li>
-    <li>Plantear una ecuación a partir de un problema y justificar la solución.</li></ul>
-    <p><a href="${pitchUrl(run, 'colegio')}">Ver la propuesta de colaboración escolar</a></p>`
+function courseNodes(run) {
+  const nodes = Object.fromEntries(Object.entries(units).map(([id, unit], index) => [id, {
+    ...unit,
+    position: index + 1,
+    status: moduleStatus(id, run),
+    locked: id === 'integracion' && !run.reviewDone,
+    done: id === 'distributiva' ? run.reviewDone : id === 'integracion' ? run.courseDone : true,
+    href: pitchUrl(run, 'unidad', { unidad: id }),
+  }]))
+  nodes.examen = {
+    title: 'Examen final', position: Object.keys(units).length + 1, concept: 'Cinco problemas para comprobar los temas del curso.',
+    status: run.score === null ? (run.courseDone ? 'Disponible' : 'Pendiente de resolver la compra') : run.score + ' de 100',
+    locked: !run.courseDone, done: run.score >= 75, href: pitchUrl(run, 'examen'),
+  }
+  return nodes
 }
 
-function route(run) {
-  const task = nextTask(run)
-  const focus = run.score !== null ? null : run.courseDone ? 'examen' : run.reviewDone ? 'integracion' : 'distributiva'
-  const nodes = Object.entries(units).map(([id, unit]) => ({ id, title: unit.title, status: moduleStatus(id, run),
-    evidence: mapEvidence[id], href: pitchUrl(run, 'unidad', { unidad: id }) }))
-  const examStatus = run.score === null ? (run.courseDone ? 'Disponible' : 'Pendiente') : run.score + ' de 100'
-  nodes.push({ id: 'examen', title: 'Examen final', status: examStatus, href: pitchUrl(run, 'examen') })
+function nodeMark(node) {
+  return `<span class="course-node-mark" aria-hidden="true" data-done="${node.done}">${node.done ? '' : node.position}</span>`
+}
 
-  return `<p class="muted">Curso y comprobaciones de dominio.</p><ol class="pitch-map">${nodes.map(node =>
-    `<li${node.id === focus ? ' class="pitch-priority"' : ''}><a href="${node.href}">
-      <span><strong>${node.title}</strong>${node.evidence ? `<small>${node.evidence}</small>` : ''}</span>
-      <span class="course-status">${node.status}</span></a></li>`).join('')}</ol>
-    <p>${link(task.href, task.action)}</p>`
+function coursePage(run) {
+  const nodes = courseNodes(run)
+  return `<div class="course-heading-row"><p>Matemáticas para el ingreso a Bachillerato</p>
+    <a href="${pitchUrl(run, 'colegio')}">Ver la propuesta de colaboración escolar</a></div>
+    <div class="course-stages">${stages.map(([title, ids]) => `<section class="course-stage">
+      <h2>${title}</h2><ol class="course-list">${ids.map(id => {
+    const node = nodes[id]
+    return `<li><a href="${mapUrl(run, id)}">${nodeMark(node)}
+      <span><strong>${node.title}</strong><small>${node.status}</small></span></a></li>`
+  }).join('')}</ol></section>`).join('')}</div>`
+}
+
+function mapUrl(run, id) {
+  return `${pitchUrl(run, 'ruta', { tramo: id })}#detalle-ruta`
+}
+
+function route(run, requested) {
+  const focus = run.courseDone ? 'examen' : run.reviewDone ? 'integracion' : 'distributiva'
+  const nodes = courseNodes(run)
+  const selection = Object.hasOwn(nodes, requested) ? requested : focus
+  const node = nodes[selection]
+  const task = selection === focus ? nextTask(run) : null
+  const detail = node.locked ? '' : task?.detail ?? node.concept
+  return `<div class="course-heading-row"><p><strong>Tu paso actual</strong> · ${nodes[focus].title}</p>
+    <a class="button secondary" href="${pitchUrl(run, 'ruta', { tramo: focus })}#nodo-${focus}">Localizar mi paso</a></div>
+    <div class="course-route">
+      <div class="course-visor">
+        <ol class="pitch-map" aria-label="Recorrido de matemáticas">${Object.entries(nodes).map(([id, item]) =>
+          `<li><a id="nodo-${id}" href="${mapUrl(run, id)}"${id === selection ? ' aria-current="location"' : ''}${id === focus ? ' data-next' : ''}>
+            ${nodeMark(item)}<span class="course-node-label"><strong>${item.title}</strong>
+            <small>${id === focus ? '<span class="sr-only">Paso actual · </span>' : ''}${item.status}</small></span></a></li>`).join('')}</ol>
+      </div>
+      <section class="course-inspector" id="detalle-ruta" tabindex="-1" aria-labelledby="route-detail-title">
+        <h2 id="route-detail-title">${node.title}</h2>
+        <p class="course-status">${mapEvidence[selection] ?? node.status}</p>
+        ${detail ? `<p>${detail}</p>` : ''}
+        ${task ? link(task.href, task.action) : node.locked
+          ? link(mapUrl(run, focus), 'Ir al paso actual') : link(node.href, selection === 'examen' ? 'Abrir examen' : 'Abrir lección')}
+      </section>
+    </div>`
 }
 
 function practice(run) {
@@ -96,10 +144,20 @@ function practice(run) {
   const evidence = `<details><summary>Evidencia del gemelo</summary><dl class="pitch-metrics">
     <div><dt>Última comprobación</dt><dd>${formatDay.format(new Date(state.retainedAt))}</dd></div>
     <div><dt>Fecha de revisión</dt><dd>${formatDay.format(new Date(state.nextCheckAt))}</dd></div></dl></details>`
-  if (run.reviewDone) return `<p><strong>Distributiva y signos</strong> · Repaso superado</p>
-    ${nextPanel(nextTask(run))}${evidence}`
-  return `<p class="course-status">${run.initial?.outcome ? moduleStatus('distributiva', run) : masteryStatus(state, at)}</p>
-    ${nextPanel(practiceTask(run))}${evidence}`
+  const nodes = courseNodes(run)
+  const distributive = run.initial?.outcome ? moduleStatus('distributiva', run) : masteryStatus(state, at)
+  return `${nextPanel(run.reviewDone ? nextTask(run) : practiceTask(run), run.reviewDone ? 'Siguiente paso' : 'Sesión recomendada')}
+    <section class="course-topics"><h2>Tus temas</h2>
+      ${stages.slice(0, 2).map(([title, ids], index) => `<details name="temas"${index === 0 && !run.courseDone ? ' open' : ''}>
+        <summary>${title}</summary>
+        <ul class="course-list">${ids.map(id => {
+    const node = nodes[id]
+    const status = id === 'distributiva' ? distributive : mapEvidence[id] ?? node.status
+    return `<li class="course-topic"><div><strong>${node.title}</strong><small>${status}</small></div>
+      ${node.locked ? '' : `<a href="${node.href}">${id === 'integracion' ? 'Ver problema' : 'Ver lección'}<span class="sr-only"> · ${node.title}</span></a>`}</li>`
+  }).join('')}</ul></details>`).join('')}
+      ${evidence}
+    </section>`
 }
 
 function reviewSteps(run, current) {
@@ -112,8 +170,8 @@ function review(run, phase) {
   if (run.canCheck && (phase === 'autonoma' || run.autonomous)) {
     const problem = run.independentProblem
     const steps = reviewSteps(run, 'autonoma')
-    if (run.reviewDone) return `${steps}<h2>Repaso superado</h2><p>Actividad integradora disponible.</p>
-      <p>${link(pitchUrl(run, 'unidad', { unidad: 'integracion' }), 'Abrir actividad integradora')}</p>
+    if (run.reviewDone) return `${steps}<h2>Repaso superado</h2><p>El problema de compra está disponible.</p>
+      <p>${link(pitchUrl(run, 'unidad', { unidad: 'integracion' }), 'Abrir problema de compra')}</p>
       <details><summary>Ver corrección</summary>${pitchFeedback(problem, run.autonomous)}</details>`
     if (run.autonomous?.outcome === 'incorrect') {
       const retry = run.alternate ? pitchUrl({ answers: {} }, 'repaso')
@@ -148,25 +206,63 @@ const cases = {
   beca: { goals: 3, exam: 92, retained: true },
 }
 
+const rewards = { prioridad: 'revisión prioritaria', beca: 'media beca' }
+
+function eligibility(candidate) {
+  if (candidate.goals < 3 || candidate.exam === null || candidate.exam < 75) return ''
+  return candidate.exam >= 90 && candidate.retained ? 'beca' : 'prioridad'
+}
+
+function candidateFrom(run) {
+  return { goals: run.courseDone ? 3 : 2, exam: run.score, retained: run.followUp?.outcome === 'correct' }
+}
+
+export function pitchApplication(params) {
+  const run = pitchRun(params)
+  const offered = eligibility(candidateFrom(run))
+  const requested = params.get('premio')
+  if (offered && offered === requested) return pitchLocation(run, 'metas', { solicitud: offered })
+  return pitchLocation(run, 'metas')
+}
+
 function goals(run, selected, showingFollowUp) {
   const own = !Object.hasOwn(cases, selected)
-  const candidate = own
-    ? { goals: run.courseDone ? 3 : 2, exam: run.score, retained: run.followUp?.outcome === 'correct' } : cases[selected]
-  const completed = candidate.goals === 3 && candidate.exam >= 75
-  const scholarship = completed && candidate.exam >= 90 && candidate.retained
-  const outcome = scholarship ? 'Candidata a media beca' : completed ? 'Candidata a revisión prioritaria' : 'Metas pendientes'
-  const score = candidate.exam === null ? 'Pendiente' : candidate.exam + ' de 100'
-  return `<section class="course-next" aria-labelledby="pitch-outcome"><h2 id="pitch-outcome">${outcome}</h2>
-    <dl class="pitch-metrics"><div><dt>Objetivos acreditados</dt><dd>${candidate.goals} de 3</dd></div>
-    <div><dt>Examen final</dt><dd>${score}</dd></div><div><dt>Retención</dt><dd>${candidate.retained ? 'Confirmada' : 'Pendiente'}</dd></div></dl></section>
-    <details><summary>Condiciones propuestas de ingreso</summary><ul>
-    <li><strong>Preferencia.</strong> Tres objetivos acreditados y 75 de 100 en el examen.</li>
-    <li><strong>Media beca.</strong> Tres objetivos, 90 de 100 y retención confirmada. Cubriría el 50 % de la colegiatura del primer ciclo.</li></ul>
-    <p>El colegio valida la candidatura y decide la asignación.</p></details>
-    ${own && run.score >= 90 ? `<section><h2>Seguimiento de retención</h2>
-      ${run.followUp?.outcome ? pitchFeedback(followUpProblem, run.followUp) : showingFollowUp
-        ? pitchForm(run, 'metas', { retencion: followUpProblem }, { retencion: run.followUp }, 'Comprobar retención', { seguimiento: 'si' })
-        : link(pitchUrl(run, 'metas', { seguimiento: 'si' }), 'Abrir seguimiento')}</section>` : ''}
+  const candidate = own ? candidateFrom(run) : cases[selected]
+  const offered = eligibility(candidate)
+  const requested = run.answers.solicitud
+  const application = own && offered && (offered === requested || requested === 'prioridad') ? requested : ''
+  const showRequest = own && offered && offered !== application
+  const score = candidate.exam === null ? 'Sin calificar' : candidate.exam + ' de 100'
+  const objectives = [
+    { title: 'Simplificar expresiones algebraicas', done: true },
+    { title: 'Resolver y comprobar ecuaciones', done: true },
+    { title: 'Plantear y resolver el problema de compra', done: candidate.goals === 3, href: mapUrl(run, 'integracion'), action: 'Ver en el mapa' },
+    { title: 'Obtener al menos 75 de 100 en el examen final', detail: score, done: candidate.exam >= 75,
+      href: mapUrl(run, 'examen'), action: 'Ver examen' },
+    { title: 'Confirmar retención', detail: 'Para la media beca se requieren 90 de 100 y una comprobación de retención.',
+      done: candidate.retained, href: run.score >= 90 ? pitchUrl(run, 'metas', { seguimiento: 'si' }) + '#seguimiento' : '',
+      action: 'Abrir seguimiento' },
+  ]
+  return `<ul class="course-list goal-checklist" aria-label="Objetivos de ingreso">${objectives.map(item => `
+    <li class="course-topic" data-done="${item.done}">
+      <span class="goal-mark" aria-hidden="true"></span>
+      <div><strong>${item.title}</strong>${item.detail ? `<small>${item.detail}</small>` : ''}
+      ${own && !item.done && item.href ? `<a href="${item.href}">${item.action}</a>` : ''}</div>
+      <span class="course-status">${item.done ? 'Cumplido' : 'Pendiente'}</span>
+    </li>`).join('')}</ul>
+    <section class="course-next" aria-labelledby="pitch-outcome"><h2 id="pitch-outcome">${offered ? 'Candidata a ' + rewards[offered] : 'Metas pendientes'}</h2>
+      ${application ? `<p role="status">Solicitud de ${rewards[application]} preparada para revisión del colegio.</p>` : ''}
+      ${offered === 'beca' ? '<p>El beneficio propuesto cubre el 50 % de la colegiatura del primer ciclo.</p>'
+        : offered ? '<p>El colegio valida la candidatura y decide la asignación.</p>'
+          : '<p>Completa los tres objetivos del curso y alcanza 75 de 100 para solicitar revisión prioritaria.</p>'}
+      ${showRequest ? `<form method="post" action="/pitch">
+        ${Object.entries(run.answers).map(([name, value]) => `<input type="hidden" name="${name}" value="${escape(value)}">`).join('')}
+        <button name="premio" value="${offered}">Solicitar ${rewards[offered]}</button>
+      </form>` : ''}
+    </section>
+    ${own && run.score >= 90 && (run.followUp?.outcome || showingFollowUp) ? `<section id="seguimiento" tabindex="-1"><h2>Seguimiento de retención</h2>
+      ${run.followUp?.outcome ? pitchFeedback(followUpProblem, run.followUp)
+        : pitchForm(run, 'metas', { retencion: followUpProblem }, { retencion: run.followUp }, 'Comprobar retención', { seguimiento: 'si' })}</section>` : ''}
     <p><a href="/pitch">Volver a empezar</a></p>`
 }
 
@@ -176,7 +272,7 @@ export function pitchPage(params) {
   const id = Object.hasOwn(units, params.get('unidad')) ? params.get('unidad') : 'fundamentos'
   const pages = {
     inicio: ['Hoy', () => today(run)], colegio: ['Colaboración escolar propuesta', () => partnership(run)],
-    curso: ['Curso', () => coursePage(run)], ruta: ['Mapa', () => route(run)], practica: ['Práctica', () => practice(run)],
+    curso: ['Curso', () => coursePage(run)], ruta: ['Mapa', () => route(run, params.get('tramo'))], practica: ['Práctica', () => practice(run)],
     unidad: [units[id].title, () => modulePage(run, id)], repaso: ['Repaso de distributiva', () => review(run, params.get('fase'))],
     examen: ['Examen final', () => examPage(run)], metas: ['Metas de ingreso', () => goals(run, params.get('caso'), params.get('seguimiento') === 'si')],
   }

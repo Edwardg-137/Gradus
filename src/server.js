@@ -7,7 +7,7 @@ import { catalog, coursePage } from './catalog-view.js'
 import { courses, modules } from './content.js'
 import { layout } from './desk-view.js'
 import { history } from './history-view.js'
-import { pitchPage } from './pitch.js'
+import { pitchApplication, pitchPage } from './pitch.js'
 import { answerExercise, findExercise, issueVariant, offersVariants, pendingExercise, startRound } from './practice.js'
 import { practicePage } from './practice-view.js'
 import { credentialsPage, profilePage } from './profile-view.js'
@@ -87,6 +87,9 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         return response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' }).end(deskScript)
       }
       if (request.method === 'GET' && pathname === '/favicon.ico') return response.writeHead(204).end()
+      if (request.method === 'POST' && pathname === '/pitch') {
+        return redirect(response, pitchApplication(await formData(request)))
+      }
       if (request.method === 'GET' && pathname === '/pitch') {
         const course = pitchPage(searchParams)
         desk.courseNavigation = course.navigation

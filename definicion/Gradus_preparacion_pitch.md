@@ -23,10 +23,10 @@ El ciclo de aprendizaje combina diagnóstico, ruta de práctica y reevaluación.
 
 Ejecuta `npm start` y abre [el modo pitch local](http://127.0.0.1:3000/pitch). Cada escena se abre manualmente. El escenario usa un colegio, una estudiante y resultados ficticios. El recorrido está disponible como invitado.
 
-1. **Curso y mapa.** Desde **Curso**, abre la propuesta de colaboración escolar. Lucía comienza con cuatro de cinco módulos cursados. **Mapa** permite abrir cada unidad y consultar su contenido y su evidencia.
+1. **Curso y mapa.** En **Curso**, recorre los módulos agrupados por etapa y abre la propuesta de colaboración escolar. Lucía comienza con cuatro de cinco módulos cursados. En **Mapa**, selecciona cualquier tramo para consultar su estado y usa **Localizar mi paso** para volver a la recomendación actual.
 2. **Intervención.** En **Hoy**, Gradus recomienda el repaso de distributiva porque venció su comprobación. **Práctica** muestra la fecha y el motivo. En el repaso, elige `−2x − 8` para mostrar un error de signo o `−2x − 4` para mostrar una distribución parcial. Gradus presenta una guía y un ejercicio acordes con el error.
-3. **Comprobación y cierre.** Resuelve la guía y después la variante sin pista. El mapa abre el problema integrador. Elige `3(x + 4) + 6 = 48` y responde `10`. El examen final tiene cinco problemas de 20 puntos y se califica al enviarlo.
-4. **Metas.** Acreditar tres objetivos y alcanzar 75 de 100 habilitaría una revisión prioritaria. Alcanzar 90 y confirmar la retención permitiría considerar una beca del 50 % de la colegiatura del primer ciclo. Después de un examen con ese puntaje, **Abrir seguimiento** abre la comprobación. La decisión le correspondería al colegio.
+3. **Comprobación y cierre.** Resuelve la guía y después la variante sin pista. El mapa abre **Resolver una compra**. Elige `3(x + 4) + 6 = 48` y responde `10`. El examen final tiene cinco problemas de 20 puntos y se califica al enviarlo.
+4. **Metas.** Consulta la lista de objetivos cumplidos y pendientes. Acreditar los tres objetivos del curso y alcanzar 75 de 100 habilita **Solicitar revisión prioritaria**. Con 90 de 100 o más, **Abrir seguimiento** abre la comprobación de retención. Al superarla se habilita **Solicitar media beca**, el beneficio propuesto del 50 % de la colegiatura del primer ciclo. Gradus confirma la solicitud dentro del recorrido. La decisión le correspondería al colegio.
 
 La demostración aplica las reglas de dominio de Gradus al historial ficticio y califica los ejercicios con reglas deterministas. El avance del ensayo viaja entre las pantallas. **Volver a empezar** reinicia el recorrido desde **Metas**. El convenio, la visita posterior y las condiciones de ingreso son simulaciones.
 
