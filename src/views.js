@@ -17,7 +17,7 @@ export function layout(title, body) {
 <body>
   <a class="skip" href="#contenido">Ir al contenido</a>
   <header><nav aria-label="Principal"><a class="brand" href="/">Gradus</a>
-    <a href="/catalogo">Catálogo</a><a href="/historial">Mi historial</a><a href="/perfil">Mi perfil</a></nav></header>
+    <a href="/estudio">Estudio</a><a href="/catalogo">Catálogo</a><a href="/historial">Mi historial</a><a href="/perfil">Mi perfil</a></nav></header>
   <main id="contenido" tabindex="-1">${body}</main>
 </body>
 </html>`
@@ -51,7 +51,7 @@ export function questionForm(question, token, action, { instanceId = question.id
   const options = question.format === 'choice'
     ? Object.entries(question.options).map(([id, label]) => `<label class="option">
       <input type="radio" name="answer" value="${id}" ${value === id ? 'checked' : ''} ${invalid}> ${escape(label)}</label>`).join('')
-    : `<label class="number">x = <input name="answer" inputmode="decimal" autocomplete="off" spellcheck="false"
+    : `<label class="number">${escape(question.answerLabel ?? 'x =')} <input name="answer" inputmode="decimal" autocomplete="off" spellcheck="false"
       value="${escape(value)}" ${invalid}></label>`
   return form(token, action, `<input type="hidden" name="instance" value="${instanceId}">
     <fieldset><legend>${escape(question.prompt)}</legend>${options}${errorMessage}</fieldset>
@@ -69,7 +69,8 @@ export function assessmentQuestion(assessment, question, token, input) {
 const outcomeLabels = { correct: 'Correcta', incorrect: 'Incorrecta', unknown: 'No lo sé todavía' }
 
 export function feedback(question, response) {
-  const answer = question.format === 'choice' ? question.options[response.value] : `x = ${response.value}`
+  const answer = question.format === 'choice' ? question.options[response.value]
+    : question.answerLabel ? response.value : `x = ${response.value}`
   return `<p><strong>${outcomeLabels[response.outcome]}</strong>${response.outcome === 'unknown' ? '' : ` · Tu respuesta fue ${escape(answer)}`}</p>
   <p>${escape(question.explanation)}</p>`
 }

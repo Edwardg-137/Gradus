@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
-import { assessments, canStartFollowUp, newBlock, nextQuestion, progressBadge, recordAnswer } from './assessment.js'
+import { assessments, canStartFollowUp, grade, newBlock, nextQuestion, progressBadge, recordAnswer } from './assessment.js'
 import { credentials, digest, limitAuth, newSecret, protectPassword, verifyPassword } from './auth.js'
 import { catalog, coursePage } from './catalog-view.js'
 import { courses, modules } from './content.js'
@@ -10,6 +10,8 @@ import { answerExercise, findExercise, issueVariant, offersVariants, pendingExer
 import { practicePage } from './practice-view.js'
 import { credentialsPage, profilePage } from './profile-view.js'
 import { accountOwner, openStore, sessionMaxAge } from './store.js'
+import { difficulties, studyQuestion, studyScope } from './study-content.js'
+import { lessonPage, studyIndex, studyScopePage } from './study-view.js'
 import { assessmentQuestion, home, initialResult, layout, message } from './views.js'
 
 const css = readFileSync(new URL('./style.css', import.meta.url))
@@ -69,6 +71,11 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         [item.path, `${item.path}/iniciar`, `${item.path}/responder`].includes(pathname)) ?? []
       const [, moduleId, action] = /^\/modulos\/([a-z-]+)(?:\/(iniciar|responder|variante))?$/.exec(pathname) ?? []
       const module = Object.hasOwn(modules, moduleId) ? modules[moduleId] : null
+      const [, studyKind, studyId, difficulty] = /^\/estudio\/(categorias|competencias)\/([a-z-]+)(?:\/([a-z]+))?$/.exec(pathname) ?? []
+      const scope = studyScope(studyKind, studyId)
+      const lesson = scope?.lessons && Object.hasOwn(difficulties, difficulty) ? scope.lessons[difficulty] : null
+      const index = Number(searchParams.get('ejercicio')) - 1
+      const exercise = lesson && (!Number.isInteger(index) || index < 0 || index >= lesson.templates.length ? 0 : index)
       if (request.method === 'GET' && pathname === '/estilos.css') {
         return response.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' }).end(css)
       }
@@ -92,6 +99,10 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         const progress = store.read(owner)
         if (pathname === '/') return page(response, 'Inicio', home(progress, token, account))
         if (pathname === '/perfil') return page(response, 'Mi perfil', profilePage(account, token))
+        if (pathname === '/estudio') return page(response, 'Estudio', studyIndex())
+        if (scope && !difficulty) return page(response, scope.title, studyScopePage(scope))
+        if (lesson) return page(response, scope.title,
+          lessonPage(scope, difficulty, exercise, studyQuestion(scope.id, difficulty, exercise, 2 + exercise), token))
         if (credentialRoute) {
           if (account) return redirect(response, '/perfil')
           return page(response, registering ? 'Crear perfil' : 'Iniciar sesión', credentialsPage(registering, token))
@@ -153,6 +164,14 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
           : failure(401, 'Revisa tu correo y contraseña.')
         setCookie(response, authCookie, secret)
         return redirect(response, '/perfil')
+      }
+      if (lesson) {
+        const question = studyQuestion(scope.id, difficulty, exercise, 2 + exercise)
+        if (data.get('instance') !== question.id) throw new RequestError(409, 'Abre la práctica para recuperar el ejercicio actual.')
+        const value = data.get('answer') ?? ''
+        const answer = grade(question, value)
+        return page(response, scope.title, lessonPage(scope, difficulty, exercise, question, token,
+          answer.error ? { value, error: answer.error } : { response: answer }), answer.error ? 422 : 200)
       }
       if (assessment && pathname === `${assessment.path}/iniciar`) {
         const location = store.update(owner, progress => {

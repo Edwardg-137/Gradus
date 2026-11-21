@@ -9,6 +9,7 @@ import { followUp, initial, modules } from '../src/content.js'
 import { history } from '../src/history-view.js'
 import { issueVariant, practiceQuestion, variantPool } from '../src/practice.js'
 import { createApp } from '../src/server.js'
+import { categories, competencies, difficulties, studyQuestion } from '../src/study-content.js'
 
 async function startServer(t, filename = ':memory:') {
   const server = createApp({ filename })
@@ -291,4 +292,53 @@ test('el perfil migra el avance, aísla cuentas y permite volver a entrar desde 
   first.cookies.set('gradus_auth', revokedCookie)
   assert.doesNotMatch(await (await first.request('/perfil')).text(), /estudiante@ejemplo.test/)
   assert.match(await (await second.request('/evaluacion')).text(), /Pregunta 2 de 4/)
+})
+
+test('el banco clasifica las preguntas y conserva claves únicas en las variantes permitidas', () => {
+  const identifiers = new Set()
+  for (const [id, competency] of Object.entries(competencies)) {
+    assert.ok(categories[competency.category].competencies.includes(id))
+    for (const difficulty of Object.keys(difficulties)) {
+      const lesson = competency.lessons[difficulty]
+      assert.deepEqual(lesson.templates.map(item => item.dimension), ['conceptual', 'conceptual', 'procedimental', 'aplicacion'])
+      for (let parameter = 2; parameter <= 30; parameter++) {
+        for (const [index] of lesson.templates.entries()) {
+          const question = studyQuestion(id, difficulty, index, parameter)
+          assert.ok(question.prompt && question.explanation && question.indicator)
+          assert.ok(!identifiers.has(question.id))
+          identifiers.add(question.id)
+          if (question.format === 'choice') {
+            assert.ok(question.options[question.key])
+            assert.equal(new Set(Object.values(question.options)).size, 3, question.id)
+          } else assert.ok(Number.isSafeInteger(question.key), question.id)
+          assert.equal(grade(question, String(question.key)).outcome, 'correct')
+        }
+      }
+    }
+  }
+  const triangle = studyQuestion('relaciones-en-el-plano', 'avanzado', 3, 4)
+  assert.equal(triangle.key, 19)
+  const budget = studyQuestion('modelacion-matematica', 'avanzado', 3, 8)
+  assert.ok(6 * budget.key + 7 <= 57 && 6 * (budget.key + 1) + 7 > 57)
+})
+
+test('las categorías enlazan todos sus niveles y la práctica corrige cada ejercicio como invitado', async t => {
+  const client = browserClient(await startServer(t))
+  const study = await (await client.request('/estudio')).text()
+  for (const [id, category] of Object.entries(categories)) {
+    assert.ok(study.includes(category.title))
+    const page = await (await client.request(`/estudio/categorias/${id}`)).text()
+    for (const competency of category.competencies) {
+      for (const difficulty of Object.keys(difficulties)) {
+        assert.ok(page.includes(`/estudio/competencias/${competency}/${difficulty}`))
+      }
+    }
+  }
+  const path = '/estudio/competencias/manipulacion-algebraica/avanzado?ejercicio=3'
+  const html = await (await client.request(path)).text()
+  assert.match(html, /Ejemplo resuelto/)
+  const instance = instanceIn(html)
+  assert.equal((await client.post(path, { instance, answer: '11abc' })).status, 422)
+  const corrected = await client.post(path, { instance, answer: '11' })
+  assert.match(await corrected.text(), /Correcta/)
 })

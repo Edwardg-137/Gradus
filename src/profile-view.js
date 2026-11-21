@@ -4,7 +4,7 @@ export function profilePage(account, token) {
   if (!account) return `<h1>Mi perfil</h1><p>Guarda tu avance y consúltalo al iniciar sesión en cualquier navegador.</p>
     <div class="actions">${link('/perfil/entrar', 'Iniciar sesión')}<a href="/perfil/registro">Crear perfil</a></div>`
   return `<h1>Mi perfil</h1><p>Correo registrado</p><p><strong>${escape(account.email)}</strong></p>
-    <p><a href="/historial">Ver mi historial</a></p>
+    <p><a href="/estudio">Ir a estudio</a> · <a href="/historial">Ver mi historial</a></p>
     ${form(token, '/perfil/salir', '<button class="secondary">Cerrar sesión</button>')}`
 }
 
