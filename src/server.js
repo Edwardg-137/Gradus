@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
 import { newBlock, nextQuestion, recordAnswer } from './assessment.js'
+import { modules } from './content.js'
+import { answerExercise, findExercise, issueVariant, offersVariants, pendingExercise, startRound } from './practice.js'
+import { practicePage } from './practice-view.js'
 import { openStore } from './store.js'
 import { assessmentQuestion, home, initialResult, layout, message } from './views.js'
 
@@ -54,7 +57,9 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
     response.setHeader('X-Content-Type-Options', 'nosniff')
 
     try {
-      const { pathname } = new URL(request.url, 'http://localhost')
+      const { pathname, searchParams } = new URL(request.url, 'http://localhost')
+      const [, moduleId, action] = /^\/modulos\/([a-z-]+)(?:\/(iniciar|responder|variante))?$/.exec(pathname) ?? []
+      const module = Object.hasOwn(modules, moduleId) ? modules[moduleId] : null
       if (request.method === 'GET' && pathname === '/estilos.css') {
         return response.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' }).end(css)
       }
@@ -77,6 +82,11 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         if (pathname === '/resultado') {
           if (!progress.initial?.result) return redirect(response, '/evaluacion')
           return page(response, 'Tu punto de partida', initialResult(progress.initial))
+        }
+        if (module && !action) {
+          const practice = progress.practice?.[moduleId]
+          const selected = findExercise(practice, searchParams.get('ejercicio'))
+          return page(response, module.title, practicePage(moduleId, practice, token, selected?.response ? selected : undefined))
         }
         return notFound(response)
       }
@@ -104,6 +114,33 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         })
         if (result.location) return redirect(response, result.location)
         return page(response, 'Evaluación inicial', assessmentQuestion(result.question, token, { value, error: result.error }), 422)
+      }
+      if (module && action) {
+        const path = `/modulos/${moduleId}`
+        const previous = data.get('previous') ?? ''
+        const value = data.get('answer') ?? ''
+        const result = store.update(session, progress => {
+          if (action === 'iniciar') {
+            startRound(progress, moduleId, previous)
+            return { location: path }
+          }
+          const practice = progress.practice?.[moduleId]
+          if (action === 'variante' && offersVariants(moduleId)) {
+            const variant = issueVariant(practice, previous)
+            return { location: variant ? `${path}?ejercicio=${variant.id}` : path }
+          }
+          if (action !== 'responder') return { location: path }
+          const instance = findExercise(practice, data.get('instance'))
+          if (instance && (instance.response || instance === pendingExercise(practice))) {
+            const answer = instance.response ?? answerExercise(practice, instance, value)
+            return answer.error
+              ? { practice, instance, error: answer.error }
+              : { location: `${path}?ejercicio=${instance.id}` }
+          }
+          throw new RequestError(409, 'Abre el módulo para recuperar el ejercicio actual.')
+        })
+        if (result.location) return redirect(response, result.location)
+        return page(response, module.title, practicePage(moduleId, result.practice, token, result.instance, { value, error: result.error }), 422)
       }
       return notFound(response)
     } catch (error) {

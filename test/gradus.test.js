@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import test from 'node:test'
 import { grade } from '../src/assessment.js'
-import { initial } from '../src/content.js'
+import { followUp, initial, modules } from '../src/content.js'
+import { issueVariant, practiceQuestion, variantPool } from '../src/practice.js'
 import { createApp } from '../src/server.js'
 
 async function startServer(t, filename = ':memory:') {
@@ -60,4 +61,65 @@ test('el diagnóstico oculta la corrección, retoma el bloque y adapta la compro
   assert.match(result, /Identificaste la transformación en la comprobación/)
   assert.match(result, /Elegiste restar 4 solo en el lado izquierdo/)
   assert.match(result, /0 de 2 respuestas correctas/)
+})
+
+test('el conjunto de la plantilla excluye el banco fijo y se puede usar sin repeticiones', () => {
+  const practice = { rounds: [{ completedAt: 'fecha' }], variants: [] }
+  const reserved = [...initial, ...followUp, ...Object.values(modules).flatMap(module => module.exercises)]
+  const equations = new Set()
+  let previous = ''
+  assert.equal(variantPool.length, 253)
+  for (let count = 0; count < variantPool.length; count++) {
+    const instance = issueVariant(practice, previous)
+    const { a, b, s } = instance.parameters
+    assert.ok(a >= 2 && a <= 5 && b >= 2 && b <= 9 && s >= 2 && s <= 9)
+    const question = practiceQuestion(instance)
+    const equation = `${a}x + ${b} = ${a * s + b}`
+    assert.equal(question.prompt, `Resuelve ${equation}.`)
+    assert.ok(question.explanation.includes(`Queda ${a}x = ${a * s}.`))
+    assert.ok(question.explanation.endsWith(`Queda x = ${s}.`))
+    assert.equal(grade(question, String(s)).outcome, 'correct')
+    assert.ok(reserved.every(item => !item.prompt.includes(equation)))
+    assert.ok(!equations.has(equation))
+    equations.add(equation)
+    instance.response = { outcome: 'correct' }
+    previous = instance.id
+  }
+  assert.equal(issueVariant(practice, previous), null)
+})
+
+const instanceIn = html => /name="instance" value="([^"]+)"/.exec(html)?.[1]
+
+test('la práctica revisada conserva la corrección y emite variantes estables y distintas', async t => {
+  const student = await guest(await startServer(t))
+  const modulePath = '/modulos/despejar-incognita'
+  const modulePage = async (path = modulePath) => (await student.get(path)).text()
+  const answer = (instance, value) => student.post(`${modulePath}/responder`, { instance, answer: value })
+
+  assert.match(await modulePage(), /Ejemplo resuelto/)
+  assert.equal((await student.post(`${modulePath}/variante`)).headers.get('location'), modulePath)
+  await student.post(`${modulePath}/iniciar`)
+  const firstId = instanceIn(await modulePage())
+  assert.equal((await answer(firstId, '8abc')).status, 422)
+  const first = await answer(firstId, '7')
+  const retry = await answer(firstId, '8')
+  assert.equal(first.headers.get('location'), retry.headers.get('location'))
+  const feedback = await modulePage(retry.headers.get('location'))
+  assert.match(feedback, /Incorrecta.*x = 7/)
+  assert.match(feedback, /Resta 9 a ambos lados/)
+
+  const second = await answer(instanceIn(await modulePage()), '6')
+  assert.match(await modulePage(second.headers.get('location')), /Ronda completada/)
+  const [variant, duplicate] = await Promise.all([student.post(`${modulePath}/variante`), student.post(`${modulePath}/variante`)])
+  const location = variant.headers.get('location')
+  assert.equal(location, duplicate.headers.get('location'))
+  const html = await modulePage(location)
+  assert.equal(await modulePage(location), html)
+  assert.match(html, /Variante de dos pasos/)
+  const [, a, b, c] = /Resuelve (\d)x \+ (\d) = (\d+)\./.exec(html)
+  const variantId = instanceIn(html)
+  assert.match(await modulePage((await answer(variantId, String((c - b) / a))).headers.get('location')), /Correcta/)
+  const another = (await student.post(`${modulePath}/variante`, { previous: variantId })).headers.get('location')
+  assert.notEqual(another, location)
+  assert.doesNotMatch(await modulePage(another), new RegExp(`Resuelve ${a}x \\+ ${b} = ${c}\\.`))
 })

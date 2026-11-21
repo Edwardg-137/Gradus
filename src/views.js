@@ -81,7 +81,7 @@ export function evidence(block, ids) {
 export function recommendation(result) {
   const { moduleId, reason } = result.recommendation
   return `<section><h2>Práctica recomendada</h2><p>${escape(reason)}</p>
-  <p><strong>${modules[moduleId].title}</strong></p></section>`
+  <p>${link(`/modulos/${moduleId}`, modules[moduleId].title)}</p></section>`
 }
 
 export function score(result) {
