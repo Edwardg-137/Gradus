@@ -21,10 +21,11 @@ export function grade(question, submitted, unknown = false) {
     return { value, outcome: value === question.key ? 'correct' : 'incorrect' }
   }
 
-  if (!/^[+-]?[0-9]+(?:[.,][0-9]+)?$/.test(value)) {
+  const signed = value.replace(/^−/, '-')
+  if (!/^[+-]?[0-9]+(?:[.,][0-9]+)?$/.test(signed)) {
     return { error: 'Escribe un número. Si usas punto o coma decimal, pon dígitos a ambos lados.' }
   }
-  const [integer, decimals = ''] = value.split(/[.,]/)
+  const [integer, decimals = ''] = signed.split(/[.,]/)
   const correct = BigInt(integer) === BigInt(question.key) && !/[1-9]/.test(decimals)
   return { value, outcome: correct ? 'correct' : 'incorrect' }
 }

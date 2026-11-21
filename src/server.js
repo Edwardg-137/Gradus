@@ -10,7 +10,9 @@ import { answerExercise, findExercise, issueVariant, offersVariants, pendingExer
 import { practicePage } from './practice-view.js'
 import { credentialsPage, profilePage } from './profile-view.js'
 import { accountOwner, openStore, sessionMaxAge } from './store.js'
-import { difficulties, studyQuestion, studyScope } from './study-content.js'
+import { difficulties, practiceTemplateCount, studyQuestion, studyScope } from './study-content.js'
+import { studyAttemptPage, studyTestOptions } from './study-test-view.js'
+import { competencyLevels, createStudyAttempt, submitStudyAnswer } from './study-tests.js'
 import { lessonPage, studyIndex, studyScopePage } from './study-view.js'
 import { assessmentQuestion, home, initialResult, layout, message } from './views.js'
 
@@ -71,11 +73,12 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         [item.path, `${item.path}/iniciar`, `${item.path}/responder`].includes(pathname)) ?? []
       const [, moduleId, action] = /^\/modulos\/([a-z-]+)(?:\/(iniciar|responder|variante))?$/.exec(pathname) ?? []
       const module = Object.hasOwn(modules, moduleId) ? modules[moduleId] : null
-      const [, studyKind, studyId, difficulty] = /^\/estudio\/(categorias|competencias)\/([a-z-]+)(?:\/([a-z]+))?$/.exec(pathname) ?? []
+      const [, studyKind, studyId, difficulty, testType] = /^\/estudio\/(categorias|competencias)\/([a-z-]+)(?:\/([a-z]+)|\/pruebas\/(rapida|completa))?$/.exec(pathname) ?? []
       const scope = studyScope(studyKind, studyId)
       const lesson = scope?.lessons && Object.hasOwn(difficulties, difficulty) ? scope.lessons[difficulty] : null
       const index = Number(searchParams.get('ejercicio')) - 1
-      const exercise = lesson && (!Number.isInteger(index) || index < 0 || index >= lesson.templates.length ? 0 : index)
+      const exercise = lesson && (!Number.isInteger(index) || index < 0 || index >= practiceTemplateCount ? 0 : index)
+      const [, attemptId, answering] = /^\/pruebas\/([a-f\d-]{36})(\/responder)?$/.exec(pathname) ?? []
       if (request.method === 'GET' && pathname === '/estilos.css') {
         return response.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' }).end(css)
       }
@@ -98,11 +101,20 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         if (login && !account) setCookie(response, authCookie, '', 0)
         const progress = store.read(owner)
         if (pathname === '/') return page(response, 'Inicio', home(progress, token, account))
-        if (pathname === '/perfil') return page(response, 'Mi perfil', profilePage(account, token))
-        if (pathname === '/estudio') return page(response, 'Estudio', studyIndex())
-        if (scope && !difficulty) return page(response, scope.title, studyScopePage(scope))
+        if (pathname === '/perfil' || pathname === '/estudio' || (scope && !difficulty && !testType)) {
+          const attempts = account ? store.studyAttempts(account.id) : []
+          if (pathname === '/perfil') return page(response, 'Mi perfil', profilePage(account, token, attempts))
+          const levels = competencyLevels(attempts)
+          if (pathname === '/estudio') return page(response, 'Estudio', studyIndex(levels))
+          return page(response, scope.title, studyScopePage(scope, levels, studyTestOptions(scope, account, attempts, token)))
+        }
         if (lesson) return page(response, scope.title,
           lessonPage(scope, difficulty, exercise, studyQuestion(scope.id, difficulty, exercise, 2 + exercise), token))
+        if (attemptId && !answering) {
+          if (!account) return redirect(response, '/perfil')
+          const attempt = store.readAttempt(account.id, attemptId)
+          return attempt ? page(response, 'Prueba', studyAttemptPage(attempt, token)) : notFound(response)
+        }
         if (credentialRoute) {
           if (account) return redirect(response, '/perfil')
           return page(response, registering ? 'Crear perfil' : 'Iniciar sesión', credentialsPage(registering, token))
@@ -172,6 +184,21 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         const answer = grade(question, value)
         return page(response, scope.title, lessonPage(scope, difficulty, exercise, question, token,
           answer.error ? { value, error: answer.error } : { response: answer }), answer.error ? 422 : 200)
+      }
+      if (scope && testType) {
+        if (!account) return redirect(response, '/perfil')
+        const attempt = store.beginAttempt(account.id, scope, testType, data.get('previous') ?? '', createStudyAttempt)
+        return redirect(response, attempt ? `/pruebas/${attempt}` : scope.path)
+      }
+      if (attemptId && answering) {
+        if (!account) return redirect(response, '/perfil')
+        const value = data.get('answer') ?? ''
+        const result = store.updateAttempt(account.id, attemptId, attempt =>
+          submitStudyAnswer(attempt, data.get('instance'), value, data.get('intent') === 'skip'))
+        if (!result) return notFound(response)
+        if (result.conflict) throw new RequestError(409, 'Abre la prueba para recuperar la pregunta actual.')
+        if (result.error) return page(response, 'Prueba', studyAttemptPage(result.attempt, token, { value, error: result.error }), 422)
+        return redirect(response, `/pruebas/${attemptId}`)
       }
       if (assessment && pathname === `${assessment.path}/iniciar`) {
         const location = store.update(owner, progress => {

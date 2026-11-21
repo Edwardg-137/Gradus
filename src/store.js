@@ -20,6 +20,14 @@ export function openStore(filename) {
     CREATE TABLE IF NOT EXISTS auth_sessions (
       id TEXT PRIMARY KEY, accountId TEXT NOT NULL REFERENCES accounts(id), expiresAt INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS study_attempts (
+      id TEXT PRIMARY KEY, accountId TEXT NOT NULL REFERENCES accounts(id),
+      kind TEXT NOT NULL, scopeId TEXT NOT NULL, type TEXT NOT NULL, createdAt TEXT NOT NULL, completedAt TEXT,
+      responses TEXT NOT NULL, result TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS study_attempt_in_progress ON study_attempts (accountId, kind, scopeId, type)
+      WHERE completedAt IS NULL;
+    CREATE INDEX IF NOT EXISTS study_attempt_account ON study_attempts (accountId);
   `)
   const select = db.prepare('SELECT progress FROM sessions WHERE id = ?')
   const write = db.prepare(`
@@ -34,6 +42,17 @@ export function openStore(filename) {
     JOIN accounts ON accounts.id = auth_sessions.accountId WHERE auth_sessions.id = ? AND expiresAt > ?`)
   const revoke = db.prepare('DELETE FROM auth_sessions WHERE id = ?')
   const clearExpired = db.prepare('DELETE FROM auth_sessions WHERE expiresAt <= ?')
+  const findAttempt = db.prepare(`SELECT id, kind, scopeId, type, createdAt, completedAt, responses, result
+    FROM study_attempts WHERE accountId = ? AND id = ?`)
+  const attemptsFor = db.prepare(`SELECT id, kind, scopeId, type, createdAt, completedAt, result
+    FROM study_attempts WHERE accountId = ? ORDER BY COALESCE(completedAt, createdAt) DESC, rowid DESC`)
+  const latestAttempt = db.prepare(`SELECT id, completedAt FROM study_attempts
+    WHERE accountId = ? AND kind = ? AND scopeId = ? AND type = ? ORDER BY rowid DESC LIMIT 1`)
+  const countAttempts = db.prepare('SELECT count(*) AS count FROM study_attempts WHERE accountId = ?')
+  const insertAttempt = db.prepare(`INSERT INTO study_attempts (id, accountId, kind, scopeId, type, createdAt, responses)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`)
+  const saveAttempt = db.prepare(`UPDATE study_attempts SET completedAt = ?, responses = ?, result = ?
+    WHERE accountId = ? AND id = ?`)
 
   function transact(action) {
     db.exec('BEGIN IMMEDIATE')
@@ -57,6 +76,15 @@ export function openStore(filename) {
     clearExpired.run(now)
     insertSession.run(id, accountId, now + sessionMaxAge * 1000)
   }
+
+  function readAttempt(accountId, id) {
+    const row = findAttempt.get(accountId, id)
+    if (!row) return null
+    const { responses, result, ...details } = row
+    return { ...details, ...JSON.parse(responses), result: result && JSON.parse(result) }
+  }
+
+  const attemptResponses = ({ version, questions, answers }) => JSON.stringify({ version, questions, answers })
 
   return {
     read,
@@ -87,6 +115,29 @@ export function openStore(filename) {
     },
     authorize: (id, accountId) => transact(() => authorize(id, accountId)),
     revoke: id => revoke.run(id),
+    readAttempt,
+    studyAttempts: accountId => attemptsFor.all(accountId).map(row => ({ ...row, result: row.result && JSON.parse(row.result) })),
+    beginAttempt(accountId, scope, type, previous, create) {
+      return transact(() => {
+        const latest = latestAttempt.get(accountId, scope.kind, scope.id, type)
+        if (latest && (!latest.completedAt || latest.id !== previous)) return latest.id
+        if (!latest && previous) return null
+        const attempt = create(scope, type, countAttempts.get(accountId).count)
+        insertAttempt.run(attempt.id, accountId, scope.kind, scope.id, type, attempt.createdAt, attemptResponses(attempt))
+        return attempt.id
+      })
+    },
+    updateAttempt(accountId, id, respond) {
+      return transact(() => {
+        const attempt = readAttempt(accountId, id)
+        if (!attempt) return null
+        const submitted = respond(attempt)
+        if (submitted.changed) {
+          saveAttempt.run(attempt.completedAt, attemptResponses(attempt), attempt.result ? JSON.stringify(attempt.result) : null, accountId, id)
+        }
+        return { ...submitted, attempt }
+      })
+    },
     close: () => db.close(),
   }
 }

@@ -9,7 +9,8 @@ import { followUp, initial, modules } from '../src/content.js'
 import { history } from '../src/history-view.js'
 import { issueVariant, practiceQuestion, variantPool } from '../src/practice.js'
 import { createApp } from '../src/server.js'
-import { categories, competencies, difficulties, studyQuestion } from '../src/study-content.js'
+import { categories, competencies, difficulties, studyQuestion, studyScope } from '../src/study-content.js'
+import { competencyLevels, createStudyAttempt, scopeLevel, submitStudyAnswer, testTypes } from '../src/study-tests.js'
 
 async function startServer(t, filename = ':memory:') {
   const server = createApp({ filename })
@@ -300,7 +301,8 @@ test('el banco clasifica las preguntas y conserva claves únicas en las variante
     assert.ok(categories[competency.category].competencies.includes(id))
     for (const difficulty of Object.keys(difficulties)) {
       const lesson = competency.lessons[difficulty]
-      assert.deepEqual(lesson.templates.map(item => item.dimension), ['conceptual', 'conceptual', 'procedimental', 'aplicacion'])
+      assert.deepEqual(lesson.templates.map(item => item.dimension),
+        ['conceptual', 'conceptual', 'procedimental', 'aplicacion', 'procedimental', 'aplicacion'])
       for (let parameter = 2; parameter <= 30; parameter++) {
         for (const [index] of lesson.templates.entries()) {
           const question = studyQuestion(id, difficulty, index, parameter)
@@ -320,6 +322,8 @@ test('el banco clasifica las preguntas y conserva claves únicas en las variante
   assert.equal(triangle.key, 19)
   const budget = studyQuestion('modelacion-matematica', 'avanzado', 3, 8)
   assert.ok(6 * budget.key + 7 <= 57 && 6 * (budget.key + 1) + 7 > 57)
+  const slope = studyQuestion('relaciones-en-el-plano', 'intermedio', 5, 8)
+  assert.equal(grade(slope, '−8').outcome, 'correct')
 })
 
 test('las categorías enlazan todos sus niveles y la práctica corrige cada ejercicio como invitado', async t => {
@@ -341,4 +345,112 @@ test('las categorías enlazan todos sus niveles y la práctica corrige cada ejer
   assert.equal((await client.post(path, { instance, answer: '11abc' })).status, 422)
   const corrected = await client.post(path, { instance, answer: '11' })
   assert.match(await corrected.text(), /Correcta/)
+})
+
+test('las dos pruebas cubren las dificultades y distinguen dominio, dimensiones y suficiencia', () => {
+  const scopes = [...Object.keys(categories).map(id => studyScope('categorias', id)),
+    ...Object.keys(competencies).map(id => studyScope('competencias', id))]
+  for (const scope of scopes) {
+    for (const [type, config] of Object.entries(testTypes)) {
+      const attempt = createStudyAttempt(scope, type, 0)
+      assert.equal(attempt.questions.length, scope.competencies.length * 3 * config.plan.length)
+      assert.equal(new Set(attempt.questions.map(question => question.id)).size, attempt.questions.length)
+      assert.equal(new Set(attempt.questions.map(question => question.templateId)).size, attempt.questions.length)
+      assert.ok(attempt.questions.every(question => question.parameter > 5))
+      const next = createStudyAttempt(scope, type, 1)
+      assert.ok(next.questions.every(question => !attempt.questions.some(other => other.prompt === question.prompt)))
+      for (const id of scope.competencies) {
+        for (const difficulty of Object.keys(difficulties)) {
+          const items = attempt.questions.filter(question => question.competencyId === id && question.difficulty === difficulty)
+          assert.equal(items.length, config.plan.length)
+          assert.equal(items.filter(question => question.dimension === 'conceptual').length, 2)
+          assert.equal(items.filter(question => question.dimension === 'aplicacion').length, type === 'completa' ? 2 : 0)
+        }
+      }
+    }
+  }
+
+  const scope = studyScope('competencias', 'manipulacion-algebraica')
+  const complete = createStudyAttempt(scope, 'completa', 0)
+  const quick = createStudyAttempt(scope, 'rapida', 1)
+  const inconclusive = createStudyAttempt(scope, 'completa', 2)
+  for (const attempt of [complete, quick, inconclusive]) {
+    for (const question of attempt.questions) {
+      const skipped = attempt === inconclusive && question.difficulty === 'basico' && question.dimension === 'aplicacion'
+      assert.ok(submitStudyAnswer(attempt, question.id, String(question.key), skipped).changed)
+    }
+  }
+  assert.equal(complete.result.competencies[scope.id].level, 3)
+  assert.equal(quick.result.competencies[scope.id].level, 2)
+  assert.equal(inconclusive.result.competencies[scope.id].level, null)
+  assert.equal(competencyLevels([inconclusive, quick, complete])[scope.id].attemptId, complete.id)
+  assert.deepEqual(scopeLevel(studyScope('categorias', 'algebra'), competencyLevels([complete])), { level: null, observed: 1, required: 2 })
+})
+
+function answerOn(html) {
+  const instance = instanceIn(html)
+  const parts = instance.split('-')
+  const parameter = Number(parts.pop())
+  const index = Number(parts.pop()) - 1
+  const difficulty = parts.pop()
+  const question = studyQuestion(parts.join('-'), difficulty, index, parameter)
+  if (question.format === 'number') return { instance, answer: String(question.key) }
+  const choices = [...html.matchAll(/name="answer" value="([a-z]+)"[^>]*> ([^<]+)<\/label>/g)]
+  return { instance, answer: choices.find(([, , label]) => label === question.options[question.key])[1] }
+}
+
+test('el perfil retoma pruebas, conserva intentos privados y actualiza la estimación por alcance', async t => {
+  const origin = await startServer(t)
+  const account = { email: 'pruebas@ejemplo.test', password: 'contraseña para pruebas' }
+  const student = browserClient(origin)
+  const scope = '/estudio/competencias/manipulacion-algebraica'
+  const category = '/estudio/categorias/algebra'
+  assert.match(await (await student.request(scope)).text(), /Sin evaluar/)
+  assert.equal((await student.post('/perfil/registro', account)).status, 303)
+  assert.match(await (await student.request(scope)).text(), /Iniciar prueba rápida/)
+  assert.match(await (await student.request(category)).text(), /36 preguntas · 50–70 min/)
+  const started = await student.post(`${scope}/pruebas/rapida`, {}, scope)
+  const path = started.headers.get('location')
+  assert.match(path, /^\/pruebas\//)
+  assert.equal((await student.post(`${scope}/pruebas/rapida`, {}, scope)).headers.get('location'), path)
+
+  let html = await (await student.request(path)).text()
+  assert.match(html, /Pregunta 1 de 9/)
+  assert.doesNotMatch(html, /Ver respuestas y soluciones/)
+  assert.equal((await student.post(`${path}/responder`, { instance: 'otra-pregunta', answer: 'a' }, path)).status, 409)
+  const first = answerOn(html)
+  assert.equal((await student.post(`${path}/responder`, first, path)).status, 303)
+  assert.equal((await student.post(`${path}/responder`, first, path)).status, 303)
+
+  const resumed = browserClient(origin)
+  assert.equal((await resumed.request(path)).headers.get('location'), '/perfil')
+  await resumed.post('/perfil/entrar', account)
+  assert.match(await (await resumed.request(path)).text(), /Pregunta 2 de 9/)
+  for (let index = 1; index < 9; index++) {
+    html = await (await resumed.request(path)).text()
+    assert.equal((await resumed.post(`${path}/responder`, answerOn(html), path)).status, 303)
+  }
+  html = await (await resumed.request(path)).text()
+  assert.match(html, /Funcional/)
+  assert.match(html, /9 de 9 respuestas correctas/)
+  assert.match(await (await resumed.request(category)).text(), /Cobertura parcial/)
+  assert.match(await (await resumed.request('/perfil')).text(), /Pruebas recientes/)
+
+  const exam = (await resumed.post(`${category}/pruebas/completa`, {}, category)).headers.get('location')
+  for (let index = 0; index < 36; index++) {
+    html = await (await resumed.request(exam)).text()
+    const answer = answerOn(html)
+    if (index === 1) assert.equal((await resumed.post(`${exam}/responder`, { ...answer, answer: '4abc' }, exam)).status, 422)
+    assert.equal((await resumed.post(`${exam}/responder`, answer, exam)).status, 303)
+  }
+  const result = await (await resumed.request(exam)).text()
+  assert.equal((result.match(/18 de 18 respuestas correctas/g) ?? []).length, 2)
+  assert.match(result, /Razonamiento y aplicación/)
+  assert.match(result, /Nivel estimado · <strong>Avanzado<\/strong>/)
+  assert.match(await (await resumed.request('/estudio')).text(), /Avanzado/)
+  assert.match(await (await resumed.request(scope)).text(), new RegExp(`href="${exam}"`))
+
+  const outsider = browserClient(origin)
+  await outsider.post('/perfil/registro', { ...account, email: 'otra@ejemplo.test' })
+  assert.equal((await outsider.request(exam)).status, 404)
 })

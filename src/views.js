@@ -51,7 +51,7 @@ export function questionForm(question, token, action, { instanceId = question.id
   const options = question.format === 'choice'
     ? Object.entries(question.options).map(([id, label]) => `<label class="option">
       <input type="radio" name="answer" value="${id}" ${value === id ? 'checked' : ''} ${invalid}> ${escape(label)}</label>`).join('')
-    : `<label class="number">${escape(question.answerLabel ?? 'x =')} <input name="answer" inputmode="decimal" autocomplete="off" spellcheck="false"
+    : `<label class="number">${escape(question.answerLabel ?? 'x =')} <input name="answer" inputmode="${question.answerLabel ? 'text' : 'decimal'}" autocomplete="off" spellcheck="false"
       value="${escape(value)}" ${invalid}></label>`
   return form(token, action, `<input type="hidden" name="instance" value="${instanceId}">
     <fieldset><legend>${escape(question.prompt)}</legend>${options}${errorMessage}</fieldset>

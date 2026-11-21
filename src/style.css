@@ -60,3 +60,5 @@ summary { cursor: pointer; }
 .fields input { min-width: 0; padding: .5rem; border: 1px solid #687587; border-radius: .3rem; }
 .exercise-links { padding-inline: 0; }
 [aria-current="step"] { font-weight: 700; }
+.test-option { margin-block: 1rem; border: 1px solid #dce1e8; border-radius: .35rem; padding: .8rem; }
+.test-option h3 { margin: 0; }
