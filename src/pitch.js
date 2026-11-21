@@ -217,7 +217,7 @@ const cases = {
   beca: { goals: 3, exam: 92, retained: true },
 }
 
-const rewards = { prioridad: 'revisión prioritaria', beca: 'media beca' }
+const rewards = { prioridad: 'inscripción prioritaria', beca: 'media beca' }
 
 function eligibility(candidate) {
   if (candidate.goals < 3 || candidate.exam === null || candidate.exam < 75) return ''
@@ -245,6 +245,7 @@ function goals(run, selected, showingFollowUp) {
   const showRequest = own && offered && offered !== application
   const score = candidate.exam === null ? 'Sin calificar' : candidate.exam + ' de 100'
   const objectives = [
+    { title: 'Habilitar la inscripción prioritaria', done: Boolean(offered) },
     { title: 'Simplificar expresiones algebraicas', done: true },
     { title: 'Resolver y comprobar ecuaciones', done: true },
     { title: 'Plantear y resolver el problema de compra', done: candidate.goals === 3, href: mapUrl(run, 'integracion'), action: 'Ver en el mapa' },
@@ -254,23 +255,23 @@ function goals(run, selected, showingFollowUp) {
       done: candidate.retained, href: run.score >= 90 ? pitchUrl(run, 'metas', { seguimiento: 'si' }) + '#seguimiento' : '',
       action: 'Abrir seguimiento' },
   ]
-  return `<ul class="course-list goal-checklist" aria-label="Objetivos de ingreso">${objectives.map(item => `
+  return `<section class="course-next" aria-labelledby="pitch-outcome"><h2 id="pitch-outcome">${offered ? 'Candidata a ' + rewards[offered] : 'Metas pendientes'}</h2>
+      ${application ? `<p role="status">Solicitud de ${rewards[application]} preparada para revisión del colegio.</p>` : ''}
+      ${offered === 'beca' ? '<p>El beneficio propuesto cubre el 50 % de la colegiatura del primer ciclo.</p>'
+        : offered ? `<p>Completaste los objetivos del curso y obtuviste ${score}. Colegio Open2 revisa tu solicitud.</p>`
+          : '<p>Completa los tres objetivos del curso y alcanza 75 de 100 para solicitar inscripción prioritaria.</p>'}
+      ${showRequest ? `<form method="post" action="/pitch">
+        ${Object.entries(run.answers).map(([name, value]) => `<input type="hidden" name="${name}" value="${escape(value)}">`).join('')}
+        <button name="premio" value="${offered}">Solicitar ${rewards[offered]}</button>
+      </form>` : ''}
+    </section>
+    <ul class="course-list goal-checklist" aria-label="Objetivos de ingreso">${objectives.map(item => `
     <li class="course-topic" data-done="${item.done}">
       <span class="goal-mark" aria-hidden="true"></span>
       <div><strong>${item.title}</strong>${item.detail ? `<small>${item.detail}</small>` : ''}
       ${own && !item.done && item.href ? `<a href="${item.href}">${item.action}</a>` : ''}</div>
       <span class="course-status">${item.done ? 'Cumplido' : 'Pendiente'}</span>
     </li>`).join('')}</ul>
-    <section class="course-next" aria-labelledby="pitch-outcome"><h2 id="pitch-outcome">${offered ? 'Candidata a ' + rewards[offered] : 'Metas pendientes'}</h2>
-      ${application ? `<p role="status">Solicitud de ${rewards[application]} preparada para revisión del colegio.</p>` : ''}
-      ${offered === 'beca' ? '<p>El beneficio propuesto cubre el 50 % de la colegiatura del primer ciclo.</p>'
-        : offered ? '<p>El colegio valida la candidatura y decide la asignación.</p>'
-          : '<p>Completa los tres objetivos del curso y alcanza 75 de 100 para solicitar revisión prioritaria.</p>'}
-      ${showRequest ? `<form method="post" action="/pitch">
-        ${Object.entries(run.answers).map(([name, value]) => `<input type="hidden" name="${name}" value="${escape(value)}">`).join('')}
-        <button name="premio" value="${offered}">Solicitar ${rewards[offered]}</button>
-      </form>` : ''}
-    </section>
     ${own && run.score >= 90 && (run.followUp?.outcome || showingFollowUp) ? `<section id="seguimiento" tabindex="-1"><h2>Seguimiento de retención</h2>
       ${run.followUp?.outcome ? pitchFeedback(followUpProblem, run.followUp)
         : pitchForm(run, 'metas', { retencion: followUpProblem }, { retencion: run.followUp }, 'Comprobar retención', { seguimiento: 'si' })}</section>` : ''}
@@ -285,7 +286,7 @@ export function pitchPage(params) {
     inicio: ['Hoy', () => today(run)], colegio: [specialCourses, () => courseCatalog(run)],
     curso: [open2Course, () => coursePage(run)], ruta: ['Mapa', () => route(run, params.get('tramo'))], practica: ['Práctica', () => practice(run)],
     unidad: [units[id].title, () => modulePage(run, id)], repaso: ['Repaso de distributiva', () => review(run, params.get('fase'))],
-    examen: ['Examen final', () => examPage(run)], metas: ['Metas de ingreso', () => goals(run, params.get('caso'), params.get('seguimiento') === 'si')],
+    examen: ['Examen final', () => examPage(run)], metas: ['Metas de ingreso · Colegio Open2', () => goals(run, params.get('caso'), params.get('seguimiento') === 'si')],
   }
   const current = Object.hasOwn(pages, requested) ? requested : 'inicio'
   const navScene = { unidad: 'ruta', examen: 'ruta', repaso: 'practica', curso: 'colegio' }[current] ?? current
