@@ -1,0 +1,53 @@
+:root {
+  color: #19212d;
+  background: #fff;
+  font-family: system-ui, sans-serif;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+header { border-bottom: 1px solid #dce1e8; }
+main, nav { max-width: 48rem; margin: auto; padding-inline: 1rem; }
+main { padding-block: 2rem 3rem; overflow-wrap: anywhere; }
+nav, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+nav { padding-block: .5rem; }
+nav a, summary { padding-block: .5rem; }
+a { color: #184d93; text-underline-offset: .18em; }
+.brand { font-size: 1.125rem; font-weight: 700; }
+h1, h2, h3 { line-height: 1.2; }
+h1 { font-size: clamp(1.65rem, 7vw, 2.4rem); margin: 0 0 1rem; }
+h2 { font-size: 1.25rem; }
+section { margin-block: 1.5rem; }
+.muted { color: #4d5868; margin: 0 0 .5rem; }
+.skip { position: absolute; transform: translateY(-120%); padding: .5rem; background: #fff; }
+.skip:focus { transform: none; }
+:focus-visible { outline: 3px solid #126ed0; outline-offset: 3px; }
+
+button, input, .button { font: inherit; }
+button, .button {
+  display: inline-block;
+  min-height: 2.75rem;
+  padding: .5rem .8rem;
+  border: 1px solid #184d93;
+  border-radius: .35rem;
+  color: white;
+  background: #184d93;
+  text-decoration: none;
+  cursor: pointer;
+}
+button:active, .button:active { background: #103963; color: white; }
+button, a, summary { touch-action: manipulation; }
+.secondary { background: white; color: #184d93; }
+fieldset { min-inline-size: 0; margin: 0 0 1rem; padding: 0; border: 0; }
+legend { font-weight: 600; margin-bottom: .75rem; padding: 0; }
+.option { display: flex; gap: .55rem; align-items: baseline; padding: .55rem 0; cursor: pointer; }
+.option input { flex: none; margin: 0; }
+.number { display: flex; gap: .55rem; align-items: center; }
+.number input { width: min(100%, 16rem); min-width: 0; padding: .5rem; border: 1px solid #687587; border-radius: .3rem; }
+.error { color: #a0202b; }
+summary { cursor: pointer; }
+.evidence { padding-inline-start: 1.5rem; }
+.evidence p { margin: .3rem 0; }
+.evidence li { margin-bottom: .85rem; }
