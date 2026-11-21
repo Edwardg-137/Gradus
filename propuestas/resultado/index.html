@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Escritorio de estudio · Gradus</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="desk.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#contenido">Saltar al contenido</a>
+  <header class="top">
+    <div class="top-inner">
+      <a class="brand" href="#contenido"><span class="brand-mark" aria-hidden="true">≡</span> Gradus</a>
+      <nav aria-label="Escritorio"><a href="#habilidades">Habilidades</a><a href="#practica">Práctica</a></nav>
+      <span class="demo">Escritorio de estudio · Demo</span>
+    </div>
+  </header>
+  <main id="contenido" tabindex="-1">
+    <section class="hero" aria-labelledby="titulo">
+      <div class="intro">
+        <h1 id="titulo">Resultado del diagnóstico</h1>
+        <p class="subtitle">Ecuaciones lineales</p>
+        <a class="button" href="#practica">Practicar despeje</a>
+      </div>
+      <figure class="notebook" aria-labelledby="notebook-title">
+        <div class="binding" aria-hidden="true"></div>
+        <div class="paper">
+          <span class="paper-label" id="notebook-title">Evaluación inicial</span>
+          <div class="score"><strong>3<span>/4</span></strong><span>respuestas<br>correctas</span></div>
+          <div class="tally" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        </div>
+      </figure>
+    </section>
+    <section id="habilidades" aria-labelledby="skill-title">
+      <div class="section-head"><h2 id="skill-title">Tus habilidades</h2></div>
+      <div class="skill-grid">
+        <article class="card skill">
+          <div class="skill-top"><span class="tile" aria-hidden="true">=</span><strong>2/2</strong></div>
+          <h3>Mantener la igualdad</h3>
+          <p class="state done"><span aria-hidden="true">✓</span> Demostrada en esta evaluación</p>
+          <details><summary>Evidencia</summary><p><b>−4 a ambos lados</b><br>x + 4 = 10 → x = 6</p></details>
+        </article>
+        <article class="card skill">
+          <div class="skill-top"><span class="tile" aria-hidden="true">𝑥</span><strong>1/2</strong></div>
+          <h3>Resolver ecuaciones</h3>
+          <p class="state growing"><span aria-hidden="true">◐</span> En desarrollo</p>
+          <details><summary>Evidencia</summary><p><b>Faltó dividir entre 3</b><br>3x = 12 → x = 4</p></details>
+          <a class="practice-link" href="#practica">Practicar despeje</a>
+        </article>
+      </div>
+    </section>
+    <section class="practice-section" id="practica" aria-labelledby="practice-title">
+      <div class="section-head"><h2 id="practice-title">Siguiente práctica</h2></div>
+      <div class="card practice">
+        <div>
+          <span class="tile" aria-hidden="true">𝑥</span>
+          <h3>Despejar la incógnita</h3>
+        </div>
+        <div class="exercise">
+          <p class="exercise-equation" id="equation">2x + 3 = 11</p>
+          <form id="answer-form" hidden>
+            <label for="answer">Valor de <var>x</var></label>
+            <div class="answer-row">
+              <input type="text" id="answer" inputmode="decimal" autocomplete="off" aria-describedby="feedback">
+              <button class="button" type="submit">Comprobar</button>
+            </div>
+          </form>
+          <p id="feedback" class="feedback" role="status"><span class="feedback-icon" aria-hidden="true"></span><span id="feedback-text"></span></p>
+          <noscript><p>Solución: resta 3 a ambos lados y divide entre 2. Así obtienes x = 4.</p></noscript>
+        </div>
+      </div>
+    </section>
+    <footer><span>Gradus</span><a href="#contenido">Volver al escritorio</a></footer>
+  </main>
+</body>
+</html>
