@@ -146,6 +146,16 @@ button, a, summary { touch-action: manipulation; }
 }
 .notebook-tabs [aria-current] { border-color: var(--sage); background: #dce3d5; box-shadow: inset 2px 2px 4px #303d3026; font-weight: 600; }
 
+.pitch-disclosure { color: var(--sage-hover); font-weight: 600; }
+.pitch-callout { padding: .75rem .95rem; border-radius: 8px; background: var(--sage-light); }
+.pitch-callout h2 { margin-top: 0; }
+.pitch-plan li { padding: .45rem .6rem; }
+.pitch-plan li p { margin: .2rem 0; }
+.pitch-priority { border-radius: 8px; background: var(--sage-light); }
+.pitch-roles dt, .pitch-metrics dt { font-weight: 600; }
+.pitch-roles dd, .pitch-metrics dd { margin: 0 0 .75rem; }
+.pitch-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: .2rem .8rem; }
+
 button, input, textarea, .button { font: inherit; }
 button, .button {
   display: inline-grid;

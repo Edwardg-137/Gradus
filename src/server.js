@@ -7,6 +7,7 @@ import { catalog, coursePage } from './catalog-view.js'
 import { courses, modules } from './content.js'
 import { layout } from './desk-view.js'
 import { history } from './history-view.js'
+import { pitchPage } from './pitch.js'
 import { answerExercise, findExercise, issueVariant, offersVariants, pendingExercise, startRound } from './practice.js'
 import { practicePage } from './practice-view.js'
 import { credentialsPage, profilePage } from './profile-view.js'
@@ -86,6 +87,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         return response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' }).end(deskScript)
       }
       if (request.method === 'GET' && pathname === '/favicon.ico') return response.writeHead(204).end()
+      if (request.method === 'GET' && pathname === '/pitch') return page(response, 'Presentación de Gradus', pitchPage(searchParams))
 
       const matches = (request.headers.cookie ?? '').matchAll(/(?:^|;\s*)(gradus_guest|gradus_auth)=([0-9a-f]{64})(?=;|$)/g)
       const cookies = Object.fromEntries(Array.from(matches, ([, name, value]) => [name, value]))

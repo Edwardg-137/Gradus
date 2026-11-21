@@ -22,6 +22,10 @@ El **dominio firme** requiere una prueba completa que estime nivel avanzado y ev
 
 Las lecciones adaptan doce variantes del [contenido publicado de Nexora](https://github.com/Edwardg-137/nexora_content/tree/d9397b19806f952827f0b1bbcba2fa0314338978). La política de dominio se basa en [el modelo de aprendizaje de Nexora](https://github.com/Edwardg-137/nexora_r_app/blob/5e745fc70dcd2684f55661c661b8d4cd02804f80/packages/cognitive-twin/src/learning.ts).
 
+## Pitch de básico a diversificado
+
+Con el servidor local abierto, entra al [modo pitch](http://127.0.0.1:3000/pitch) para recorrer las escenas con datos ficticios. La [preparación del pitch](definicion/Gradus_preparacion_pitch.md) incluye el guion manual y las decisiones pendientes para un piloto.
+
 ## Recorrido de la demo
 
 1. Abre **Medir mi punto de partida**. Elige restar 4 solo al lado izquierdo, elige dividir ambos lados entre 3, responde `13` y después `5`. Aparece la comprobación adicional.

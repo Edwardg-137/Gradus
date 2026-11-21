@@ -284,6 +284,27 @@ test('el escritorio sirve el script local y reserva las notas para fuera de una 
   assert.doesNotMatch(active, /Nota adhesiva/)
 })
 
+test('el pitch calcula la prioridad de repaso y los beneficios de ejemplo fuera del perfil real', async t => {
+  const origin = await startServer(t)
+  const client = browserClient(origin)
+  const scene = async (query = '') => (await client.request(`/pitch${query}`)).text()
+  const intro = await scene()
+  assert.match(intro, /Colegio, estudiante y resultados ficticios/)
+  assert.match(intro, /Ver la colaboración/)
+  assert.equal(client.cookies.size, 0)
+  assert.match(await scene('?escena=colegio'), /Colegio Demo Horizonte/)
+  const route = await scene('?escena=ruta')
+  assert.match(route, /<ol class="pitch-plan"><li class="pitch-priority">\s*<strong>Repasar Propiedad distributiva y signos/)
+  assert.match(route, /Toca comprobar/)
+  assert.match(await scene('?escena=repaso&respuesta=signo'), /Vista previa de la lección personalizada/)
+  assert.match(await scene('?escena=repaso&respuesta=ambos'), /Retomar la ruta/)
+  assert.match(await scene('?escena=metas'), /<h2 id="pitch-outcome">Metas pendientes/)
+  assert.match(await scene('?escena=metas&caso=prioridad'), /<h2 id="pitch-outcome">Candidata a revisión prioritaria/)
+  assert.match(await scene('?escena=metas&caso=beca'), /<h2 id="pitch-outcome">Candidata a media beca/)
+  assert.equal(client.cookies.size, 0)
+  assert.equal((await client.request('/evaluacion')).headers.get('location'), '/')
+})
+
 test('el perfil migra el avance, aísla cuentas y permite volver a entrar desde otro navegador', async t => {
   const origin = await startServer(t)
   const first = browserClient(origin)

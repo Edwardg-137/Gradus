@@ -32,6 +32,7 @@ function overview(title, path, progress) {
     '/catalogo': ['Cuaderno de estudio', 'Cursos y práctica'],
     '/historial': ['Matemáticas', 'Mi progreso'],
     '/perfil': ['Gradus', 'Mi espacio'],
+    '/pitch': ['Pitch de Gradus', 'De básico a diversificado'],
   }
   const current = sectionPath(path)
   const diagnostic = path === '/' || /^\/(evaluacion|reevaluacion|resultado)(\/|$)/.test(path)
