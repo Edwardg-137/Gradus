@@ -9,6 +9,7 @@ const equations = 'resolucion-ecuaciones'
 const modeling = 'modelacion-matematica'
 const course = 'Matemáticas para Bachillerato'
 const specialCourses = 'Cursos especiales'
+const open2Course = 'Matemáticas de ingreso · Colegio Open2'
 const navigation = { inicio: 'Hoy', ruta: 'Mapa', practica: 'Práctica', colegio: specialCourses, metas: 'Metas' }
 const stages = [
   ['Bases de álgebra', ['fundamentos', 'distributiva']],
@@ -71,10 +72,20 @@ function today(run) {
   return nextPanel(nextTask(run))
 }
 
-function partnership(run) {
-  return `<dl class="pitch-roles"><div><dt>El colegio</dt><dd>Define el temario, valida el examen y decide cupos y becas.</dd></div>
-    <div><dt>Gradus</dt><dd>Estimaría el nivel, organizaría los refuerzos y entregaría un resumen del grupo.</dd></div></dl>
-    <div class="pitch-reveal">${link(pitchUrl(run, 'curso'), 'Revelar curso')}</div>`
+function courseCatalog(run) {
+  return `<ul class="course-catalog" role="list">
+    <li>
+      <div><h2>${open2Course}</h2>
+        <p>Practica álgebra, ecuaciones y problemas aplicados para el examen de ingreso a 4.º bachillerato.</p>
+        <p class="course-duration">5 semanas estimadas</p></div>
+      ${link(pitchUrl(run, 'curso'), 'Revelar curso')}
+    </li>
+    <li>
+      <div><h2>Preparación para bachillerato</h2>
+        <p class="course-duration">8 semanas estimadas</p></div>
+      <p class="course-release">Se desbloquea el <time datetime="2026-12-01">1 de diciembre</time></p>
+    </li>
+  </ul>`
 }
 
 function courseNodes(run) {
@@ -100,8 +111,7 @@ function nodeMark(node) {
 
 function coursePage(run) {
   const nodes = courseNodes(run)
-  return `<div class="course-heading-row"><p>Matemáticas para el ingreso a Bachillerato</p>
-    <a href="${pitchUrl(run, 'colegio')}">Ver la propuesta de colaboración escolar</a></div>
+  return `<div class="course-heading-row"><a href="${pitchUrl(run, 'colegio')}">Ver cursos especiales</a></div>
     <div class="course-stages">${stages.map(([title, ids]) => `<section class="course-stage">
       <h2>${title}</h2><ol class="course-list">${ids.map(id => {
     const node = nodes[id]
@@ -272,8 +282,8 @@ export function pitchPage(params) {
   const requested = params.get('escena')
   const id = Object.hasOwn(units, params.get('unidad')) ? params.get('unidad') : 'fundamentos'
   const pages = {
-    inicio: ['Hoy', () => today(run)], colegio: ['Colaboración escolar propuesta', () => partnership(run)],
-    curso: [specialCourses, () => coursePage(run)], ruta: ['Mapa', () => route(run, params.get('tramo'))], practica: ['Práctica', () => practice(run)],
+    inicio: ['Hoy', () => today(run)], colegio: [specialCourses, () => courseCatalog(run)],
+    curso: [open2Course, () => coursePage(run)], ruta: ['Mapa', () => route(run, params.get('tramo'))], practica: ['Práctica', () => practice(run)],
     unidad: [units[id].title, () => modulePage(run, id)], repaso: ['Repaso de distributiva', () => review(run, params.get('fase'))],
     examen: ['Examen final', () => examPage(run)], metas: ['Metas de ingreso', () => goals(run, params.get('caso'), params.get('seguimiento') === 'si')],
   }
@@ -282,7 +292,7 @@ export function pitchPage(params) {
   const [title, render] = pages[current]
   return {
     title,
-    body: `<h1${current === 'colegio' ? ' class="pitch-partnership-title"' : ''}>${title}</h1>${render()}`,
+    body: `<h1>${title}</h1>${render()}`,
     navigation: `<aside class="leaf overview course-nav" aria-label="Programa de preparación"><strong>${course}</strong>
       <p class="muted">Lucía · 3.º básico</p>${courseProgress(run)}
       <nav aria-label="Curso">${Object.entries(navigation).map(([id, label]) =>
