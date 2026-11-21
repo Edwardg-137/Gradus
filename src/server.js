@@ -5,6 +5,7 @@ import { assessments, canStartFollowUp, newBlock, nextQuestion, progressBadge, r
 import { credentials, digest, limitAuth, newSecret, protectPassword, verifyPassword } from './auth.js'
 import { catalog, coursePage } from './catalog-view.js'
 import { courses, modules } from './content.js'
+import { layout } from './desk-view.js'
 import { history } from './history-view.js'
 import { answerExercise, findExercise, issueVariant, offersVariants, pendingExercise, startRound } from './practice.js'
 import { practicePage } from './practice-view.js'
@@ -16,9 +17,10 @@ import { masteryProfiles } from './study-mastery.js'
 import { masterySection, studyAttemptPage, studyTestOptions } from './study-test-view.js'
 import { competencyLevels, createRetentionAttempt, createStudyAttempt, submitStudyAnswer } from './study-tests.js'
 import { lessonChooser, lessonPage, studyIndex, studyScopePage } from './study-view.js'
-import { assessmentQuestion, home, initialResult, layout, message } from './views.js'
+import { assessmentQuestion, home, initialResult, message } from './views.js'
 
 const css = readFileSync(new URL('./style.css', import.meta.url))
+const deskScript = readFileSync(new URL('./desk.js', import.meta.url))
 const guestCookie = 'gradus_guest'
 const authCookie = 'gradus_auth'
 
@@ -46,16 +48,8 @@ async function formData(request) {
   return new URLSearchParams(Buffer.concat(chunks).toString('utf8'))
 }
 
-function page(response, title, body, status = 200) {
-  response.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' }).end(layout(title, body))
-}
-
 function redirect(response, location) {
   response.writeHead(303, { Location: location }).end()
-}
-
-function notFound(response) {
-  return page(response, 'Página no encontrada', message('Página no encontrada', 'El enlace no está disponible.'), 404)
 }
 
 export function createApp({ filename = 'data/gradus.sqlite', secureCookie = false, clock = Date.now } = {}) {
@@ -64,8 +58,13 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
   const setCookie = (response, name, value, age = sessionMaxAge) => response.appendHeader('Set-Cookie',
     `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secureCookie ? '; Secure' : ''}`)
   const server = createServer(async (request, response) => {
+    const desk = {}
+    const page = (response, title, body, status = 200) => response.writeHead(status,
+      { 'Content-Type': 'text/html; charset=utf-8' }).end(layout(title, body, desk))
+    const notFound = response => page(response, 'Página no encontrada',
+      message('Página no encontrada', 'El enlace no está disponible.'), 404)
     response.setHeader('Cache-Control', 'no-store')
-    response.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+    response.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
     response.setHeader('Referrer-Policy', 'same-origin')
     response.setHeader('X-Content-Type-Options', 'nosniff')
 
@@ -78,8 +77,13 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       const [, studyKind, studyId, difficulty, lessonMode, tests, testType, retention] = /^\/estudio\/(categorias|competencias)\/([a-z-]+)(?:\/(basico|intermedio|avanzado)(?:\/(rapida|completa))?|(\/pruebas)(?:\/(rapida|completa))?|\/(retencion))?$/.exec(pathname) ?? []
       const scope = studyScope(studyKind, studyId)
       const [, attemptId, answering] = /^\/pruebas\/([a-f\d-]{36})(\/responder)?$/.exec(pathname) ?? []
+      desk.pathname = pathname
+      desk.testing = Boolean(assessment || attemptId)
       if (request.method === 'GET' && pathname === '/estilos.css') {
         return response.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' }).end(css)
+      }
+      if (request.method === 'GET' && pathname === '/escritorio.js') {
+        return response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' }).end(deskScript)
       }
       if (request.method === 'GET' && pathname === '/favicon.ico') return response.writeHead(204).end()
 
@@ -92,6 +96,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       const account = loginId ? store.accountForSession(loginId) : null
       const at = new Date(clock()).toISOString()
       const owner = account ? accountOwner(account.id) : guest
+      desk.storageKey = digest(`gradus-desk:${owner}`)
       const token = digest(`gradus-form:${account ? login : guest}`)
       const registering = pathname === '/perfil/registro'
       const credentialRoute = registering || pathname === '/perfil/entrar'
@@ -102,6 +107,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         if (!cookies[guestCookie]) setCookie(response, guestCookie, guest)
         if (login && !account) setCookie(response, authCookie, '', 0)
         const progress = store.read(owner)
+        desk.progress = progress
         if (pathname === '/') return page(response, 'Inicio', home(progress, token, account))
         if (pathname === '/perfil' || pathname === '/estudio' || (scope && !difficulty)) {
           const attempts = account ? store.studyAttempts(account.id) : []
@@ -126,6 +132,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
           if (!account) return redirect(response, '/perfil')
           const attempt = store.readAttempt(account.id, attemptId)
           if (!attempt) return notFound(response)
+          desk.testing = !attempt.completedAt
           let mastery = ''
           if (attempt.completedAt) {
             const attempts = store.studyAttempts(account.id)
@@ -166,6 +173,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       if ((!cookies[guestCookie] && !account) || data.get('token') !== token) {
         throw new RequestError(403, 'Vuelve a abrir la página para recuperar tu sesión.')
       }
+      if (assessment || module) desk.progress = store.read(owner)
       if (pathname === '/perfil/salir') {
         if (account) store.revoke(loginId)
         setCookie(response, authCookie, '', 0)

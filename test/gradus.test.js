@@ -268,6 +268,22 @@ function browserClient(origin) {
   return { request, post, cookies }
 }
 
+test('el escritorio sirve el script local y reserva las notas para fuera de una prueba activa', async t => {
+  const client = browserClient(await startServer(t))
+  const home = await client.request('/')
+  const shell = await home.text()
+  const deskKey = /data-desk-key="([a-f\d]+)"/.exec(shell)?.[1]
+  assert.equal(deskKey?.length, 64)
+  assert.ok(!client.cookies.get('gradus_guest').endsWith(deskKey))
+  assert.match(shell, /Nota adhesiva/)
+  assert.match(home.headers.get('content-security-policy'), /script-src 'self'/)
+  assert.match((await client.request('/escritorio.js')).headers.get('content-type'), /text\/javascript/)
+  assert.equal((await client.post('/evaluacion/iniciar', {}, '/')).status, 303)
+  const active = await (await client.request('/evaluacion')).text()
+  assert.match(active, /Lámpara de lectura/)
+  assert.doesNotMatch(active, /Nota adhesiva/)
+})
+
 test('el perfil migra el avance, aísla cuentas y permite volver a entrar desde otro navegador', async t => {
   const origin = await startServer(t)
   const first = browserClient(origin)
