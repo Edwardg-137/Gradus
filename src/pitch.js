@@ -8,7 +8,8 @@ const algebra = 'manipulacion-algebraica'
 const equations = 'resolucion-ecuaciones'
 const modeling = 'modelacion-matematica'
 const course = 'Matemáticas para Bachillerato'
-const navigation = { inicio: 'Hoy', ruta: 'Mapa', practica: 'Práctica', curso: 'Curso', metas: 'Metas' }
+const specialCourses = 'Cursos especiales'
+const navigation = { inicio: 'Hoy', ruta: 'Mapa', practica: 'Práctica', colegio: specialCourses, metas: 'Metas' }
 const stages = [
   ['Bases de álgebra', ['fundamentos', 'distributiva']],
   ['Ecuaciones y modelación', ['ecuaciones', 'modelacion', 'integracion']],
@@ -73,7 +74,7 @@ function today(run) {
 function partnership(run) {
   return `<dl class="pitch-roles"><div><dt>El colegio</dt><dd>Define el temario, valida el examen y decide cupos y becas.</dd></div>
     <div><dt>Gradus</dt><dd>Estimaría el nivel, organizaría los refuerzos y entregaría un resumen del grupo.</dd></div></dl>
-    <p><a href="${pitchUrl(run, 'curso')}">Volver al curso</a></p>`
+    <div class="pitch-reveal">${link(pitchUrl(run, 'curso'), 'Revelar curso')}</div>`
 }
 
 function courseNodes(run) {
@@ -272,16 +273,16 @@ export function pitchPage(params) {
   const id = Object.hasOwn(units, params.get('unidad')) ? params.get('unidad') : 'fundamentos'
   const pages = {
     inicio: ['Hoy', () => today(run)], colegio: ['Colaboración escolar propuesta', () => partnership(run)],
-    curso: ['Curso', () => coursePage(run)], ruta: ['Mapa', () => route(run, params.get('tramo'))], practica: ['Práctica', () => practice(run)],
+    curso: [specialCourses, () => coursePage(run)], ruta: ['Mapa', () => route(run, params.get('tramo'))], practica: ['Práctica', () => practice(run)],
     unidad: [units[id].title, () => modulePage(run, id)], repaso: ['Repaso de distributiva', () => review(run, params.get('fase'))],
     examen: ['Examen final', () => examPage(run)], metas: ['Metas de ingreso', () => goals(run, params.get('caso'), params.get('seguimiento') === 'si')],
   }
   const current = Object.hasOwn(pages, requested) ? requested : 'inicio'
-  const navScene = { unidad: 'ruta', examen: 'ruta', repaso: 'practica', colegio: 'curso' }[current] ?? current
+  const navScene = { unidad: 'ruta', examen: 'ruta', repaso: 'practica', curso: 'colegio' }[current] ?? current
   const [title, render] = pages[current]
   return {
     title,
-    body: `<h1>${title}</h1>${render()}`,
+    body: `<h1${current === 'colegio' ? ' class="pitch-partnership-title"' : ''}>${title}</h1>${render()}`,
     navigation: `<aside class="leaf overview course-nav" aria-label="Programa de preparación"><strong>${course}</strong>
       <p class="muted">Lucía · 3.º básico</p>${courseProgress(run)}
       <nav aria-label="Curso">${Object.entries(navigation).map(([id, label]) =>
