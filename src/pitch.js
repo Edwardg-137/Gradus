@@ -1,7 +1,7 @@
-import { grade } from './assessment.js'
-import { nexoraLessons } from './nexora-content.js'
+import { courseProgress, examPage, followUpProblem, initialProblem, modulePage, moduleStatus,
+  pitchFeedback, pitchForm, pitchRun, pitchUrl, units } from './pitch-course.js'
 import { masteryProfiles, masteryStatus } from './study-mastery.js'
-import { escape, feedback, link } from './views.js'
+import { link } from './views.js'
 
 const at = '2026-11-21T17:00:00.000Z'
 const algebra = 'manipulacion-algebraica'
@@ -9,7 +9,7 @@ const equations = 'resolucion-ecuaciones'
 const modeling = 'modelacion-matematica'
 const college = 'Colegio Demo Horizonte'
 const course = 'Matemáticas para ingresar a Bachillerato'
-const scenes = { inicio: 'Inicio', colegio: 'Colegio', ruta: 'Ruta', repaso: 'Repaso', metas: 'Metas' }
+const scenes = { inicio: 'Inicio', colegio: 'Colegio', curso: 'Curso', ruta: 'Mapa', repaso: 'Repaso', metas: 'Metas' }
 
 function completed(competency, day) {
   return {
@@ -30,60 +30,81 @@ const learning = masteryProfiles([
   retained(algebra, 14), retained(algebra, 11), completed(algebra, 10),
 ])
 
-const coursePlan = [
-  { skill: equations, title: 'Ecuaciones con paréntesis', reason: 'Continúa con ecuaciones cuando hayas repasado la distributiva.' },
-  { skill: algebra, title: 'Propiedad distributiva y signos', reason: 'Esta habilidad se usa al quitar paréntesis.' },
-  { skill: modeling, title: 'Plantear una ecuación a partir de un enunciado', reason: 'Consolida cómo traducir un problema a una igualdad.' },
-].map(item => ({ ...item, status: masteryStatus(learning[item.skill], at) }))
-const priority = coursePlan.find(item => item.status === 'Toca comprobar')
-const adaptedPlan = [priority, ...coursePlan.filter(item => item !== priority)]
 const formatDay = new Intl.DateTimeFormat('es-GT', { day: 'numeric', month: 'long', timeZone: 'America/Guatemala' })
+const mapEvidence = { ecuaciones: masteryStatus(learning[equations], at), modelacion: masteryStatus(learning[modeling], at) }
 
-const check = {
-  format: 'choice', prompt: '¿Cuál es el resultado de desarrollar −2(x − 4)?', key: 'ambos',
-  options: { ambos: '−2x + 8', signo: '−2x − 8', parcial: '−2x − 4' },
-  explanation: 'El −2 multiplica a x y a −4. El producto (−2)(−4) es +8.',
+function entry(run) {
+  return `<p>Lucía, estudiante ficticia de tercero básico, está por terminar el curso que ofrece el colegio para ingresar a Bachillerato.</p>
+    ${courseProgress(run)}<p>Explora lo que ya estudió, resuelve el repaso que Gradus adelantó y completa el examen del curso.</p>
+    <div class="actions">${link(pitchUrl(run, 'curso'), 'Abrir curso')}<a href="${pitchUrl(run, 'colegio')}">Ver la colaboración</a></div>`
 }
 
-function entry() {
-  return `<p>Lucía, estudiante ficticia de tercero básico, quiere ingresar a Bachillerato. El colegio le propone un curso de preparación y Gradus ajusta qué debe practicar primero.</p>
-    <h2>Recorrido</h2><ol><li>Conoce el curso propuesto por el colegio.</li><li>Revisa por qué el gemelo cambia la ruta de Lucía.</li>
-    <li>Responde un ejercicio y compara los resultados posibles del curso.</li></ol>
-    <p>${link('/pitch?escena=colegio', 'Ver la colaboración')}</p>`
-}
-
-function partnership() {
+function partnership(run) {
   return `<h2>${college}</h2><p>En este escenario, el colegio ofrece <strong>${course}</strong> a estudiantes de tercero básico que quieren ingresar a diversificado.</p>
     <dl class="pitch-roles"><div><dt>El colegio</dt><dd>Define los temas de ingreso, valida el examen final y decide la asignación de cupos y becas.</dd></div>
     <div><dt>Gradus</dt><dd>Estima el nivel inicial y propone una ruta individual. El piloto contemplaría un resumen de avance del grupo para el colegio.</dd></div></dl>
-    <p>El curso trabaja propiedad distributiva, ecuaciones con paréntesis y modelación de problemas.</p>
-    <p>${link('/pitch?escena=ruta', 'Ver la ruta de Lucía')}</p>`
+    <p>${link(pitchUrl(run, 'curso'), 'Abrir el curso del colegio')}</p>`
 }
 
-function route() {
-  const state = learning[priority.skill]
-  return `<p>En el historial ficticio, Lucía ya había demostrado dominio en manipulación algebraica. Pasó la fecha de revisión y la distributiva es una base para su siguiente lección.</p>
-    <p class="pitch-callout"><strong>${priority.status}</strong> · Última comprobación el ${formatDay.format(new Date(state.retainedAt))}. La siguiente venció el ${formatDay.format(new Date(state.nextCheckAt))}. El gemelo adelanta un repaso para comprobar qué recuerda Lucía.</p>
-    <details><summary>Ver orden original del curso</summary><ol>${coursePlan.map(item => `<li>${item.title}</li>`).join('')}</ol></details>
-    <h2>Ruta personalizada</h2><ol class="pitch-plan">${adaptedPlan.map(item => `<li${item === priority ? ' class="pitch-priority"' : ''}>
-      <strong>${item === priority ? 'Repasar ' : ''}${item.title}</strong><p>${item.status} · ${item.reason}</p></li>`).join('')}</ol>
-    <p>${link('/pitch?escena=repaso', 'Abrir el repaso recomendado')}</p>`
+function coursePage(run) {
+  return `<p>${college} · Programa de preparación para estudiantes de tercero básico.</p>${courseProgress(run)}
+    <h2>Objetivos del curso</h2><ul><li>Transformar expresiones conservando su valor.</li>
+    <li>Resolver y comprobar ecuaciones con paréntesis.</li><li>Plantear una ecuación a partir de un problema y justificar la solución.</li></ul>
+    <p>${run.courseDone ? 'La actividad integradora está completada.' : 'Lucía ya cursó las cuatro primeras unidades. Le queda una actividad integradora y el examen final.'}</p>
+    <p>${link(pitchUrl(run, 'ruta'), 'Abrir mapa interactivo')}</p>`
 }
 
-function review(answer) {
-  const response = Object.hasOwn(check.options, answer) ? grade(check, answer) : null
-  if (!response) return `<p>Lucía empieza por un ejercicio breve para localizar la dificultad antes de seguir con ecuaciones.</p>
-    <form method="get" action="/pitch"><input type="hidden" name="escena" value="repaso">
-    <fieldset><legend>${check.prompt}</legend>${Object.entries(check.options).map(([id, label]) =>
-      `<label class="option"><input required type="radio" name="respuesta" value="${id}"> ${label}</label>`).join('')}</fieldset>
-    <button>Comprobar respuesta</button></form>`
-  const sample = nexoraLessons[algebra].intermedio
-  return `<p><strong>${check.prompt}</strong></p>${feedback(check, response)}
-    ${response.outcome === 'correct' ? `<section><h2>Retomar la ruta</h2><p>Lucía puede continuar con ecuaciones con paréntesis. Una comprobación autónoma posterior confirmaría la retención.</p></section>`
-    : `<section><h2>Refuerzo recomendado</h2><p>${answer === 'signo' ? 'Lucía aplicó la operación a ambos términos y cambió el signo del segundo producto.'
-      : 'Lucía dejó el segundo término fuera de la multiplicación.'} El gemelo propone una lección completa de distributiva antes de avanzar.</p>
-      <details open><summary>Vista previa de la lección personalizada</summary><p>${escape(sample.concept)}</p><p>${escape(sample.example)}</p></details></section>`}
-    <div class="actions">${link('/pitch?escena=metas', 'Ver metas del colegio')}<a href="/pitch?escena=repaso">Probar otra respuesta</a></div>`
+function route(run) {
+  const state = learning[algebra]
+  const due = masteryStatus(state, at)
+  let notice = `<strong>${due}.</strong> Última comprobación el ${formatDay.format(new Date(state.retainedAt))}. La siguiente venció el ${formatDay.format(new Date(state.nextCheckAt))}. Gradus adelanta el repaso de distributiva antes de la actividad integradora.`
+  if (run.reviewDone) notice = '<strong>Repaso superado.</strong> Lucía resolvió un problema nuevo sin pista. Gradus abrió la actividad integradora.'
+  else if (run.canCheck) notice = '<strong>Comprobación pendiente.</strong> Gradus pide una variante sin pista antes de continuar con la actividad integradora.'
+  else if (run.guide) notice = `<strong>Refuerzo asignado.</strong> La siguiente práctica de Lucía es «${run.guide.title}».`
+  const open = run.courseDone ? link(pitchUrl(run, 'examen'), 'Abrir examen final') : run.reviewDone
+    ? link(pitchUrl(run, 'unidad', { unidad: 'integracion' }), 'Abrir actividad integradora')
+    : link(pitchUrl(run, 'repaso'), 'Abrir el repaso asignado')
+  return `${courseProgress(run)}<p class="pitch-callout">${notice}</p>${open}
+    <h2>Ruta personalizada</h2><ol class="pitch-map">${Object.entries(units).map(([id, unit]) =>
+      `<li${id === (run.reviewDone ? 'integracion' : 'distributiva') && !run.courseDone ? ' class="pitch-priority"' : ''}>
+        <a href="${pitchUrl(run, 'unidad', { unidad: id })}"><strong>${unit.title}</strong><span>${moduleStatus(id, run)}${mapEvidence[id] ? ` · ${mapEvidence[id]}` : ''}</span></a></li>`).join('')}
+      <li><a href="${pitchUrl(run, 'examen')}"><strong>Examen final</strong><span>${run.score === null
+        ? run.courseDone ? 'Disponible' : 'Tras la actividad integradora' : `Calificado · ${run.score} de 100`}</span></a></li></ol>`
+}
+
+function review(run, phase) {
+  if (run.canCheck && (phase === 'autonoma' || run.autonomous)) {
+    const problem = run.independentProblem
+    if (run.reviewDone) return `<p><strong>${problem.prompt}</strong></p>${pitchFeedback(problem, run.autonomous)}
+      <h2>Repaso superado</h2><p>Gradus abre la actividad integradora. La retención se podrá comprobar en otra visita.</p>
+      <div class="actions">${link(pitchUrl(run, 'unidad', { unidad: 'integracion' }), 'Continuar con la actividad integradora')}
+      <a href="${pitchUrl(run, 'ruta')}">Ver mapa actualizado</a></div>`
+    if (run.autonomous?.outcome === 'incorrect') {
+      const retry = run.alternate ? pitchUrl({ answers: {} }, 'repaso')
+        : pitchUrl(run, 'repaso', { fase: 'autonoma', variante: '1', autonoma: '' })
+      return `<p><strong>${problem.prompt}</strong></p>${pitchFeedback(problem, run.autonomous)}
+        <p>La actividad integradora sigue pendiente. Gradus propone otra oportunidad de comprobación.</p>
+        <p>${link(retry, run.alternate ? 'Reiniciar repaso' : 'Probar otro ejercicio sin pista')}</p>`
+    }
+    return `<h2>Comprobación sin pista</h2><p>Resuelve una variante nueva para retomar el curso.</p>
+      ${pitchForm(run, 'repaso', { autonoma: problem }, { autonoma: run.autonomous }, 'Comprobar sin pista', { fase: 'autonoma' })}`
+  }
+
+  if (run.guide && (phase === 'guiada' || run.guided)) {
+    const { title, clue, question } = run.guide
+    return `<h2>${title}</h2><p class="pitch-callout"><strong>Pista</strong> · ${clue}</p> ${pitchFeedback(question, run.guided)}
+      ${run.canCheck ? `<p>${link(pitchUrl(run, 'repaso', { fase: 'autonoma' }), 'Pasar a un ejercicio sin pista')}</p>`
+        : pitchForm(run, 'repaso', { guiada: question }, { guiada: run.guided }, 'Comprobar práctica guiada', { fase: 'guiada' })}`
+  }
+
+  if (!run.initial?.outcome) return `<p>Gradus comprueba qué recuerda Lucía de la distributiva antes de abrir el último módulo.</p>
+    ${pitchForm(run, 'repaso', { respuesta: initialProblem }, { respuesta: run.initial }, 'Comprobar respuesta')}`
+  return `<p><strong>${initialProblem.prompt}</strong></p>${pitchFeedback(initialProblem, run.initial)}
+    ${run.guide ? `<h2>Gradus interviene</h2><p>${run.initial.value === 'signo' ? 'Lucía distribuyó a ambos términos y se equivocó en el signo del producto.'
+      : 'Lucía aplicó el factor a un solo término.'} Gradus adapta el siguiente ejercicio a ese error y deja pendiente la actividad integradora.</p>
+    <p>${link(pitchUrl(run, 'repaso', { fase: 'guiada' }), 'Repetir con ayuda')}</p>`
+      : `<p>Gradus propone una variante adicional para comprobar que Lucía puede aplicar la distributiva por su cuenta.</p>
+      <p>${link(pitchUrl(run, 'repaso', { fase: 'autonoma' }), 'Pasar a un ejercicio sin pista')}</p>`}`
 }
 
 const cases = {
@@ -92,34 +113,45 @@ const cases = {
   beca: { label: 'Media beca', goals: 3, exam: 92, retained: true },
 }
 
-function goals(selected) {
-  const id = Object.hasOwn(cases, selected) ? selected : 'pendiente'
-  const candidate = cases[id]
+function goals(run, selected, showingFollowUp) {
+  const actual = run.score !== null
+  const id = Object.hasOwn(cases, selected) ? selected : actual ? 'recorrido' : 'pendiente'
+  const outcomes = actual ? { recorrido: { label: 'Mi resultado', goals: 3, exam: run.score, retained: run.followUp?.outcome === 'correct' }, ...cases } : cases
+  const candidate = outcomes[id]
   const completed = candidate.goals === 3 && candidate.exam >= 75
   const scholarship = completed && candidate.exam >= 90 && candidate.retained
   const outcome = scholarship ? 'Candidata a media beca' : completed ? 'Candidata a revisión prioritaria' : 'Metas pendientes'
   return `<p>Condiciones de ejemplo para el curso. La preferencia y la beca dependerían de las condiciones que el colegio apruebe para un piloto.</p>
     <ul><li><strong>Preferencia de inscripción.</strong> Acreditar los tres objetivos y obtener al menos 75 de 100 en el examen final.</li>
     <li><strong>Media beca.</strong> Acreditar los objetivos, obtener al menos 90 de 100 y confirmar la retención de la base priorizada. El ejemplo cubre el 50 % de la colegiatura del primer ciclo.</li></ul>
-    <nav class="notebook-tabs" aria-label="Casos de ejemplo">${Object.entries(cases).map(([key, item]) =>
-      `<a href="/pitch?escena=metas&amp;caso=${key}"${key === id ? ' aria-current="page"' : ''}>${item.label}</a>`).join('')}</nav>
+    <nav class="notebook-tabs" aria-label="Casos de ejemplo">${Object.entries(outcomes).map(([key, item]) =>
+      `<a href="${pitchUrl(run, 'metas', { caso: key })}"${key === id ? ' aria-current="page"' : ''}>${item.label}</a>`).join('')}</nav>
     <section class="pitch-callout" aria-labelledby="pitch-outcome"><h2 id="pitch-outcome">${outcome}</h2>
     <dl class="pitch-metrics"><div><dt>Objetivos acreditados</dt><dd>${candidate.goals} de 3</dd></div>
     <div><dt>Examen final</dt><dd>${candidate.exam} de 100</dd></div><div><dt>Retención</dt><dd>${candidate.retained ? 'Confirmada' : 'Pendiente'}</dd></div></dl>
-    <p>Este caso representa un momento posterior del curso con resultados ficticios.</p></section>
+    <p>${id === 'recorrido' ? 'Resultado del recorrido de práctica y examen en esta simulación.' : 'Caso precargado con resultados ficticios.'}</p></section>
+    ${id === 'recorrido' && run.score >= 90 ? `<section><h2>Seguimiento posterior simulado</h2>
+      <p>En una visita posterior, Gradus presenta un problema distinto para volver a comprobar la distributiva.</p>
+      ${run.followUp?.outcome ? pitchFeedback(followUpProblem, run.followUp) : showingFollowUp
+        ? pitchForm(run, 'metas', { retencion: followUpProblem }, { retencion: run.followUp }, 'Comprobar retención', { seguimiento: 'si' })
+        : link(pitchUrl(run, 'metas', { seguimiento: 'si' }), 'Abrir visita posterior')}</section>` : ''}
     <p>${link('/pitch', 'Volver al inicio del pitch')}</p>`
 }
 
 export function pitchPage(params) {
+  const run = pitchRun(params)
   const requested = params.get('escena')
-  const current = Object.hasOwn(scenes, requested) ? requested : 'inicio'
+  const id = Object.hasOwn(units, params.get('unidad')) ? params.get('unidad') : 'fundamentos'
+  const current = Object.hasOwn(scenes, requested) || requested === 'unidad' || requested === 'examen' ? requested : 'inicio'
+  const navScene = current === 'unidad' || current === 'examen' ? 'ruta' : current
   const pages = {
-    inicio: ['Preparación para diversificado', entry], colegio: ['Colaboración con un colegio', partnership],
-    ruta: ['El gemelo reorganiza la ruta', route], repaso: ['Repaso de distributiva', () => review(params.get('respuesta'))],
-    metas: ['Metas de ingreso y media beca', () => goals(params.get('caso'))],
+    inicio: ['Preparación para diversificado', () => entry(run)], colegio: ['Colaboración con un colegio', () => partnership(run)],
+    curso: [course, () => coursePage(run)], ruta: ['Mapa del curso de Lucía', () => route(run)],
+    unidad: [units[id].title, () => modulePage(run, id)], repaso: ['Repaso de distributiva', () => review(run, params.get('fase'))],
+    examen: ['Examen final', () => examPage(run)], metas: ['Metas de ingreso y media beca', () => goals(run, params.get('caso'), params.get('seguimiento') === 'si')],
   }
   const [title, body] = pages[current]
   return `<h1>${title}</h1><p class="pitch-disclosure">Simulación de pitch · Colegio, estudiante y resultados ficticios</p>
     <nav class="notebook-tabs" aria-label="Escenas del pitch">${Object.entries(scenes).map(([id, label]) =>
-      `<a href="${id === 'inicio' ? '/pitch' : `/pitch?escena=${id}`}"${id === current ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>${body()}`
+      `<a href="${pitchUrl(run, id)}"${id === navScene ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>${body()}`
 }

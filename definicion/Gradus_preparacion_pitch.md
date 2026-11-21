@@ -23,12 +23,14 @@ El ciclo de aprendizaje combina diagnóstico, ruta de práctica y reevaluación.
 
 Ejecuta `npm start` y abre [el modo pitch local](http://127.0.0.1:3000/pitch). Cada escena se abre manualmente. El escenario usa un colegio, una estudiante y resultados ficticios. El recorrido está disponible como invitado.
 
-1. **Colegio.** El Colegio Demo Horizonte propone un curso de matemáticas a estudiantes de tercero básico interesados en Bachillerato. El colegio define los contenidos y el examen. Gradus muestra la ruta de aprendizaje.
-2. **Ruta.** Abre el orden original y compáralo con el orden personalizado. El gemelo usa el historial ficticio y detecta que venció la comprobación de manipulación algebraica. Como la distributiva es necesaria para resolver ecuaciones con paréntesis, el repaso pasa al inicio.
-3. **Repaso.** Elige `−2x − 8` para mostrar un error de signo o `−2x − 4` para mostrar que quedó un término sin distribuir. En ambos casos se abre una vista previa de la lección completa de refuerzo. Elige `−2x + 8` para mostrar cómo se retoma la ruta y se propone una comprobación autónoma de retención.
-4. **Metas.** Alterna entre En curso, Preferencia y Media beca. Estos casos representan momentos posteriores. Como hipótesis del pitch, acreditar tres objetivos y alcanzar 75 de 100 habilitaría una revisión prioritaria. Alcanzar 90 y confirmar la retención también permitiría considerar una beca del 50 % de la colegiatura del primer ciclo. La decisión le correspondería al colegio.
+1. **Colegio y curso.** El Colegio Demo Horizonte propone un curso de matemáticas a estudiantes de tercero básico interesados en Bachillerato. Lucía empieza con cuatro de cinco módulos cursados. El mapa permite abrir cada unidad y ver su contenido y su evidencia.
+2. **Intervención.** Intenta abrir el problema integrador. El gemelo, al detectar una comprobación vencida, prioriza la distributiva antes de ese problema. En el repaso, elige `−2x − 8` para mostrar un error de signo o `−2x − 4` para mostrar una distribución parcial. Gradus presenta una guía y un ejercicio acordes con el error.
+3. **Comprobación y cierre.** Resuelve la guía y después la variante sin pista. El mapa abre el problema integrador. Para ese problema, elige `3(x + 4) + 6 = 48` y responde `10`. El examen final tiene cinco problemas de 20 puntos y se califica al enviarlo.
+4. **Metas.** Usa el resultado del recorrido o los casos precargados de En curso, Preferencia y Media beca. Como hipótesis del pitch, acreditar tres objetivos y alcanzar 75 de 100 habilitaría una revisión prioritaria. Alcanzar 90 y confirmar la retención permitiría considerar una beca del 50 % de la colegiatura del primer ciclo. Después de un examen con ese puntaje, **Abrir visita posterior** permite ensayar la comprobación de retención. La decisión le correspondería al colegio.
 
-La demostración aplica las reglas de dominio de Gradus al historial ficticio. El reordenamiento del curso, la adaptación de la lección, el convenio y las condiciones de ingreso son simulaciones. Un repaso breve identifica una dificultad y orienta qué hacer después. La retención se comprueba con evidencia posterior.
+La demostración aplica las reglas de dominio de Gradus al historial ficticio y califica los ejercicios con reglas deterministas. El avance del ensayo viaja entre las escenas del pitch. **Volver al inicio del pitch** reinicia el recorrido. El convenio, la visita posterior y las condiciones de ingreso son simulaciones.
+
+Para ensayar un examen de 100, responde `−7`, `−6x + 15`, `6`, `15 + 5c = 40` y `4`, en ese orden. En la visita posterior, elige `−10x + 20`.
 
 ## Decisiones por cerrar para un piloto
 

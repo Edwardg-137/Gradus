@@ -24,7 +24,7 @@ Las lecciones adaptan doce variantes del [contenido publicado de Nexora](https:/
 
 ## Pitch de básico a diversificado
 
-Con el servidor local abierto, entra al [modo pitch](http://127.0.0.1:3000/pitch) para recorrer las escenas con datos ficticios. La [preparación del pitch](definicion/Gradus_preparacion_pitch.md) incluye el guion manual y las decisiones pendientes para un piloto.
+Con el servidor local abierto, entra al [modo pitch](http://127.0.0.1:3000/pitch) para recorrer el mapa de un curso ficticio, resolver el repaso intervenido y presentar el examen final. La [preparación del pitch](definicion/Gradus_preparacion_pitch.md) incluye el guion y las decisiones pendientes para un piloto.
 
 ## Recorrido de la demo
 

@@ -294,15 +294,45 @@ test('el pitch calcula la prioridad de repaso y los beneficios de ejemplo fuera 
   assert.equal(client.cookies.size, 0)
   assert.match(await scene('?escena=colegio'), /Colegio Demo Horizonte/)
   const route = await scene('?escena=ruta')
-  assert.match(route, /<ol class="pitch-plan"><li class="pitch-priority">\s*<strong>Repasar Propiedad distributiva y signos/)
+  assert.match(route, /<ol class="pitch-map">[\s\S]+Propiedad distributiva y signos<\/strong><span>Repaso pendiente/)
   assert.match(route, /Toca comprobar/)
-  assert.match(await scene('?escena=repaso&respuesta=signo'), /Vista previa de la lección personalizada/)
-  assert.match(await scene('?escena=repaso&respuesta=ambos'), /Retomar la ruta/)
+  assert.match(await scene('?escena=curso'), /4 de 5 módulos cursados/)
+  assert.match(await scene('?escena=unidad&unidad=ecuaciones'), /3\(x \+ 2\) = 18/)
+  assert.match(await scene('?escena=repaso&respuesta=signo'), /Gradus interviene/)
+  assert.match(await scene('?escena=repaso&respuesta=parcial&fase=guiada'), /Distribuir a cada término/)
   assert.match(await scene('?escena=metas'), /<h2 id="pitch-outcome">Metas pendientes/)
   assert.match(await scene('?escena=metas&caso=prioridad'), /<h2 id="pitch-outcome">Candidata a revisión prioritaria/)
   assert.match(await scene('?escena=metas&caso=beca'), /<h2 id="pitch-outcome">Candidata a media beca/)
   assert.equal(client.cookies.size, 0)
   assert.equal((await client.request('/evaluacion')).headers.get('location'), '/')
+})
+
+test('el repaso intervenido abre el módulo final y el examen se califica con sus respuestas', async t => {
+  const client = browserClient(await startServer(t))
+  const visit = async (escena, values = {}) => (await client.request(`/pitch?${new URLSearchParams({ escena, ...values })}`)).text()
+  const initial = { respuesta: 'signo' }
+  assert.match(await visit('unidad', { ...initial, unidad: 'integracion' }), /Completa un ejercicio nuevo sin pista/)
+  assert.match(await visit('ruta', initial), /Refuerzo asignado[\s\S]*Revisar el signo de un producto/)
+  assert.match(await visit('repaso', { ...initial, fase: 'guiada' }), /Revisar el signo de un producto/)
+  assert.doesNotMatch(await visit('repaso', { ...initial, guiada: 'a', fase: 'autonoma' }), /Desarrolla −4\(2x − 3\)/)
+  const guided = { ...initial, guiada: 'b' }
+  assert.match(await visit('repaso', { ...guided, fase: 'autonoma' }), /Comprobación sin pista/)
+  assert.match(await visit('repaso', { ...guided, autonoma: 'a' }), /Probar otro ejercicio sin pista/)
+  assert.match(await visit('repaso', { ...guided, variante: '1', fase: 'autonoma' }), /Desarrolla −2\(3x − 5\)/)
+  const reviewed = { ...guided, variante: '1', autonoma: 'a' }
+  assert.match(await visit('ruta', reviewed), /Abrir actividad integradora/)
+  assert.match(await visit('examen', { ...reviewed, modelo: 'b', precio: '10' }), /El examen se abre al completar/)
+  const finished = { ...reviewed, modelo: 'a', precio: '10' }
+  assert.match(await visit('ruta', finished), /5 de 5 módulos cursados/)
+  assert.match(await visit('examen', { ...finished, p1: '-7x' }), /Escribe un número/)
+  const exam = { ...finished, p1: '-7', p2: 'b', p3: '6', p4: 'c', p5: '3' }
+  assert.match(await visit('examen', exam), /80 de 100/)
+  assert.match(await visit('metas', { ...exam, retencion: 'a' }), /Candidata a revisión prioritaria/)
+  const perfect = { ...exam, p5: '4' }
+  assert.match(await visit('metas', perfect), /Retención<\/dt><dd>Pendiente/)
+  assert.match(await visit('metas', { ...perfect, seguimiento: 'si' }), /desarrolla −5\(2x − 4\)/)
+  assert.match(await visit('metas', { ...perfect, retencion: 'a' }), /<h2 id="pitch-outcome">Candidata a media beca/)
+  assert.equal(client.cookies.size, 0)
 })
 
 test('el perfil migra el avance, aísla cuentas y permite volver a entrar desde otro navegador', async t => {
