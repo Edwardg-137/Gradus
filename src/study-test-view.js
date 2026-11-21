@@ -1,5 +1,5 @@
 import { competencies, difficulties, dimensions, studyScope } from './study-content.js'
-import { confidenceLabel, levelLabel, nextStudyQuestion, scopeLevel, testTypes } from './study-tests.js'
+import { confidenceLabel, levelLabel, nextStudyQuestion, scopeLevel, testConfig, testTypes } from './study-tests.js'
 import { button, escape, feedback, form, link, questionForm } from './views.js'
 
 const dates = new Intl.DateTimeFormat('es-GT', { dateStyle: 'medium', timeZone: 'America/Guatemala' })
@@ -21,8 +21,8 @@ export function studyTestOptions(scope, account, attempts, token) {
       const previous = attempts.find(item => item.kind === scope.kind && item.scopeId === scope.id && item.type === type)
       const [min, max] = config.minutes.map(minutes => minutes * size)
       const description = type === 'rapida'
-        ? 'Estima tu nivel con preguntas de conceptos y ejercicios breves.'
-        : 'Examina conceptos, procedimientos y problemas de aplicación.'
+        ? 'Estima tu nivel con conceptos, detección de errores y ejercicios breves.'
+        : 'Comprueba procedimientos, decisiones en contexto y sus justificaciones.'
       let action = ''
       if (account) {
         action = previous && !previous.completedAt ? link(testPath(previous.id), `Retomar ${config.title.toLowerCase()}`)
@@ -37,8 +37,8 @@ export function studyTestOptions(scope, account, attempts, token) {
 
 export function studyAttemptPage(attempt, token, input) {
   const scope = studyScope(attempt.kind, attempt.scopeId)
-  const type = testTypes[attempt.type]
-  const heading = `<p><a href="${scope.path}">${scope.title}</a></p><h1>${type.title}</h1>`
+  const type = testConfig(attempt.type, attempt.version)
+  const heading = `<p>${scope.title} · <a href="${scope.path}/pruebas">Elegir tipo de prueba</a></p><h1>${type.title}</h1>`
   if (!attempt.completedAt) {
     const question = nextStudyQuestion(attempt)
     const position = attempt.questions.indexOf(question) + 1
@@ -54,6 +54,7 @@ export function studyAttemptPage(attempt, token, input) {
       ? 'Estimación orientativa. La prueba completa aporta evidencia de aplicación y puede estimar el nivel avanzado.'
       : 'Estimación basada en los ejercicios de esta prueba y en la cobertura de sus tres dimensiones.'}</p>
     <p>Cada dificultad requiere ${type.minimumCorrect} de ${type.plan.length} aciertos y al menos uno por dimensión evaluada.</p>
+    ${attempt.type === 'completa' && attempt.version >= 2 ? '<p>También cuenta la justificación del problema de aplicación de cada dificultad.</p>' : ''}
     ${Object.entries(results).map(([id, item]) => `<section><h2>${competencies[id].title}</h2>
       ${studyLevel(item)}
       <p>${item.totals.correct} de ${item.totals.total} respuestas correctas${item.totals.answered < item.totals.total
@@ -65,7 +66,7 @@ export function studyAttemptPage(attempt, token, input) {
         .map(question => `<li><p>${escape(question.prompt)}</p>${feedback(question, attempt.answers[question.id])}</li>`).join('')}</ol></details>
       <p><a href="/estudio/competencias/${id}/${item.recommendedDifficulty}">Practicar ${difficulties[item.recommendedDifficulty].toLowerCase()}</a></p>
     </section>`).join('')}
-    <p>${link(`${scope.path}#pruebas`, 'Volver a las pruebas')}</p>`
+    <p>${link(`${scope.path}/pruebas`, 'Volver a las pruebas')}</p>`
 }
 
 export function recentStudyAttempts(attempts) {

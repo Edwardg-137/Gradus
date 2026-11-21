@@ -42,19 +42,26 @@ export function home(progress, token, account) {
   <p>Descubre qué habilidades has demostrado y qué puedes practicar a continuación.</p>
   <ul><li>${skills.igualdad} con preguntas de selección múltiple.</li>
   <li>${skills.resolucion} escribiendo el valor de x.</li></ul>
-  <p>${account ? 'Tu avance se guarda en tu perfil.' : 'Tu sesión de invitado se guarda en este navegador.'}</p>${action}`
+  <p>${account ? 'Tu avance se guarda en tu perfil.' : 'Tu sesión de invitado se guarda en este navegador.'}</p>
+  <p>${link('/estudio/categorias/ecuaciones/pruebas', 'Elegir una prueba')}</p>${action}`
 }
 
-export function questionForm(question, token, action, { instanceId = question.id, value = '', error, canSkip = false, extraFields = '' } = {}) {
+function radioOptions(options, name, value, invalid) {
+  return Object.entries(options).map(([id, label]) => `<label class="option">
+    <input type="radio" name="${name}" value="${id}" ${value === id ? 'checked' : ''} ${invalid}> ${escape(label)}</label>`).join('')
+}
+
+export function questionForm(question, token, action, { instanceId = question.id, value = '', reasoningValue, error, canSkip = false, extraFields = '' } = {}) {
   const errorMessage = error ? `<p class="error" id="error-respuesta" role="alert">${escape(error)}</p>` : ''
   const invalid = error ? 'aria-invalid="true" aria-describedby="error-respuesta"' : ''
   const options = question.format === 'choice'
-    ? Object.entries(question.options).map(([id, label]) => `<label class="option">
-      <input type="radio" name="answer" value="${id}" ${value === id ? 'checked' : ''} ${invalid}> ${escape(label)}</label>`).join('')
+    ? radioOptions(question.options, 'answer', value, invalid)
     : `<label class="number">${escape(question.answerLabel ?? 'x =')} <input name="answer" inputmode="${question.answerLabel ? 'text' : 'decimal'}" autocomplete="off" spellcheck="false"
       value="${escape(value)}" ${invalid}></label>`
   return form(token, action, `${extraFields}<input type="hidden" name="instance" value="${instanceId}">
-    <fieldset><legend>${escape(question.prompt)}</legend>${options}${errorMessage}</fieldset>
+    <fieldset><legend>${escape(question.prompt)}</legend>${options}</fieldset>
+    ${question.reasoning ? `<fieldset><legend>${escape(question.reasoning.prompt)}</legend>
+      ${radioOptions(question.reasoning.options, 'reasoning', reasoningValue, invalid)}</fieldset>` : ''}${errorMessage}
     <div class="actions"><button name="intent" value="answer">Enviar respuesta</button>
     ${canSkip ? '<button class="secondary" name="intent" value="skip">No lo sé todavía</button>' : ''}</div>`)
 }
@@ -72,6 +79,8 @@ export function feedback(question, response) {
   const answer = question.format === 'choice' ? question.options[response.value]
     : question.answerLabel ? response.value : `x = ${response.value}`
   return `<p><strong>${outcomeLabels[response.outcome]}</strong>${response.outcome === 'unknown' ? '' : ` · Tu respuesta fue ${escape(answer)}`}</p>
+  ${response.reasoning ? `<p>Resultado ${response.resultCorrect ? 'correcto' : 'incorrecto'} · Justificación ${response.reasonCorrect ? 'correcta' : 'incorrecta'}.</p>
+    <p>Elegiste «${escape(question.reasoning.options[response.reasoning])}».</p>` : ''}
   <p>${escape(question.explanation)}</p>`
 }
 
@@ -102,7 +111,7 @@ export function initialResult(progress, token) {
   else if (progress.followUp) next = link('/reevaluacion', 'Retomar mi reevaluación')
   else if (canStartFollowUp(progress)) next = form(token, '/reevaluacion/iniciar', button('Comprobar mi avance'))
   return `<h1>Tu punto de partida</h1>
-  ${next}
+  ${next}<p><a href="/estudio/categorias/ecuaciones/pruebas">Elegir otra prueba</a></p>
   ${Object.entries(results).map(([id, result]) => {
     const exampleId = result.evidence.find(id => block.answers[id].outcome !== 'correct') ?? result.evidence[0]
     const question = assessmentQuestions.find(item => item.id === exampleId)

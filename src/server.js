@@ -196,11 +196,12 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       if (attemptId && answering) {
         if (!account) return redirect(response, '/perfil')
         const value = data.get('answer') ?? ''
+        const reasoningValue = data.get('reasoning') ?? ''
         const result = store.updateAttempt(account.id, attemptId, attempt =>
-          submitStudyAnswer(attempt, data.get('instance'), value, data.get('intent') === 'skip'))
+          submitStudyAnswer(attempt, data.get('instance'), value, data.get('intent') === 'skip', reasoningValue))
         if (!result) return notFound(response)
         if (result.conflict) throw new RequestError(409, 'Abre la prueba para recuperar la pregunta actual.')
-        if (result.error) return page(response, 'Prueba', studyAttemptPage(result.attempt, token, { value, error: result.error }), 422)
+        if (result.error) return page(response, 'Prueba', studyAttemptPage(result.attempt, token, { value, reasoningValue, error: result.error }), 422)
         return redirect(response, `/pruebas/${attemptId}`)
       }
       if (assessment && pathname === `${assessment.path}/iniciar`) {

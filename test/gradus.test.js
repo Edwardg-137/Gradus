@@ -10,6 +10,7 @@ import { history } from '../src/history-view.js'
 import { issueVariant, practiceQuestion, variantPool } from '../src/practice.js'
 import { createApp } from '../src/server.js'
 import { categories, competencies, difficulties, studyQuestion, studyScope } from '../src/study-content.js'
+import { testQuestion } from '../src/study-diagnostics.js'
 import { competencyLevels, createStudyAttempt, scopeLevel, submitStudyAnswer, testTypes } from '../src/study-tests.js'
 
 async function startServer(t, filename = ':memory:') {
@@ -374,8 +375,9 @@ test('las dos pruebas cubren las dificultades y distinguen dominio, dimensiones 
         for (const difficulty of Object.keys(difficulties)) {
           const items = attempt.questions.filter(question => question.competencyId === id && question.difficulty === difficulty)
           assert.equal(items.length, config.plan.length)
-          assert.equal(items.filter(question => question.dimension === 'conceptual').length, 2)
-          assert.equal(items.filter(question => question.dimension === 'aplicacion').length, type === 'completa' ? 2 : 0)
+          assert.equal(items.filter(question => question.dimension === 'conceptual').length, type === 'completa' ? 3 : 2)
+          assert.equal(items.filter(question => question.dimension === 'aplicacion').length, type === 'completa' ? 3 : 0)
+          assert.equal(items.filter(question => question.reasoning).length, type === 'completa' ? 1 : 0)
         }
       }
     }
@@ -388,7 +390,7 @@ test('las dos pruebas cubren las dificultades y distinguen dominio, dimensiones 
   for (const attempt of [complete, quick, inconclusive]) {
     for (const question of attempt.questions) {
       const skipped = attempt === inconclusive && question.difficulty === 'basico' && question.dimension === 'aplicacion'
-      assert.ok(submitStudyAnswer(attempt, question.id, String(question.key), skipped).changed)
+      assert.ok(submitStudyAnswer(attempt, question.id, String(question.key), skipped, question.reasoning?.key).changed)
     }
   }
   assert.equal(complete.result.competencies[scope.id].level, 3)
@@ -404,10 +406,13 @@ function answerOn(html) {
   const parameter = Number(parts.pop())
   const index = Number(parts.pop()) - 1
   const difficulty = parts.pop()
-  const question = studyQuestion(parts.join('-'), difficulty, index, parameter)
-  if (question.format === 'number') return { instance, answer: String(question.key) }
-  const choices = [...html.matchAll(/name="answer" value="([a-z]+)"[^>]*> ([^<]+)<\/label>/g)]
-  return { instance, answer: choices.find(([, , label]) => label === question.options[question.key])[1] }
+  const question = testQuestion(parts.join('-'), difficulty, index, parameter)
+  const select = (name, question) => {
+    const choices = [...html.matchAll(new RegExp(`name="${name}" value="([a-z]+)"[^>]*> ([^<]+)</label>`, 'g'))]
+    return choices.find(([, , label]) => label === question.options[question.key])[1]
+  }
+  return { instance, answer: question.format === 'number' ? String(question.key) : select('answer', question),
+    ...(question.reasoning && { reasoning: select('reasoning', question.reasoning) }) }
 }
 
 test('el perfil retoma pruebas, conserva intentos privados y actualiza la estimación por alcance', async t => {
@@ -419,7 +424,9 @@ test('el perfil retoma pruebas, conserva intentos privados y actualiza la estima
   assert.match(await (await student.request(scope)).text(), /Sin evaluar/)
   assert.equal((await student.post('/perfil/registro', account)).status, 303)
   assert.match(await (await student.request(scope)).text(), /Iniciar prueba rápida/)
-  assert.match(await (await student.request(category)).text(), /36 preguntas · 50–70 min/)
+  assert.match(await (await student.request(category)).text(), /48 preguntas · 60–90 min/)
+  const picker = await (await student.request(`${category}/pruebas`)).text()
+  assert.match(picker, /Elige una prueba[\s\S]+Prueba rápida[\s\S]+Prueba completa/)
   const started = await student.post(`${scope}/pruebas/rapida`, {}, scope)
   const path = started.headers.get('location')
   assert.match(path, /^\/pruebas\//)
@@ -448,14 +455,19 @@ test('el perfil retoma pruebas, conserva intentos privados y actualiza la estima
   assert.match(await (await resumed.request('/perfil')).text(), /Pruebas recientes/)
 
   const exam = (await resumed.post(`${category}/pruebas/completa`, {}, category)).headers.get('location')
-  for (let index = 0; index < 36; index++) {
+  for (let index = 0; index < 48; index++) {
     html = await (await resumed.request(exam)).text()
     const answer = answerOn(html)
     if (index === 1) assert.equal((await resumed.post(`${exam}/responder`, { ...answer, answer: '4abc' }, exam)).status, 422)
+    if (index === 7) {
+      const invalid = await resumed.post(`${exam}/responder`, { ...answer, reasoning: '' }, exam)
+      assert.equal(invalid.status, 422)
+      assert.match(await invalid.text(), /Elige el procedimiento/)
+    }
     assert.equal((await resumed.post(`${exam}/responder`, answer, exam)).status, 303)
   }
   const result = await (await resumed.request(exam)).text()
-  assert.equal((result.match(/18 de 18 respuestas correctas/g) ?? []).length, 2)
+  assert.equal((result.match(/24 de 24 respuestas correctas/g) ?? []).length, 2)
   assert.match(result, /Razonamiento y aplicación/)
   assert.match(result, /Nivel estimado · <strong>Avanzado<\/strong>/)
   assert.match(await (await resumed.request('/estudio')).text(), /Avanzado/)
@@ -464,4 +476,18 @@ test('el perfil retoma pruebas, conserva intentos privados y actualiza la estima
   const outsider = browserClient(origin)
   await outsider.post('/perfil/registro', { ...account, email: 'otra@ejemplo.test' })
   assert.equal((await outsider.request(exam)).status, 404)
+})
+
+test('una solución numérica correcta con justificación incorrecta no acredita esa dificultad', () => {
+  const attempt = createStudyAttempt(studyScope('competencias', 'resolucion-ecuaciones'), 'completa', 1)
+  for (const question of attempt.questions) {
+    const badReason = question.reasoning && question.difficulty === 'avanzado'
+    const reason = badReason ? Object.keys(question.reasoning.options).find(key => key !== question.reasoning.key) : question.reasoning?.key
+    submitStudyAnswer(attempt, question.id, String(question.key), false, reason)
+    if (badReason) assert.deepEqual([attempt.answers[question.id].resultCorrect, attempt.answers[question.id].reasonCorrect], [true, false])
+  }
+  const result = attempt.result.competencies['resolucion-ecuaciones']
+  assert.equal(result.totals.correct, 23)
+  assert.equal(result.level, 2)
+  assert.equal(result.breakdown.avanzado.justified, false)
 })
