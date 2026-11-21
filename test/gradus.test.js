@@ -11,10 +11,11 @@ import { issueVariant, practiceQuestion, variantPool } from '../src/practice.js'
 import { createApp } from '../src/server.js'
 import { categories, competencies, difficulties, studyQuestion, studyScope } from '../src/study-content.js'
 import { testQuestion } from '../src/study-diagnostics.js'
+import { masteryProfiles, masteryStatus } from '../src/study-mastery.js'
 import { competencyLevels, createStudyAttempt, scopeLevel, submitStudyAnswer, testTypes } from '../src/study-tests.js'
 
-async function startServer(t, filename = ':memory:') {
-  const server = createApp({ filename })
+async function startServer(t, filename = ':memory:', options = {}) {
+  const server = createApp({ filename, ...options })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   t.after(() => new Promise(resolve => server.close(resolve)))
@@ -416,13 +417,18 @@ function answerOn(html) {
 }
 
 test('el perfil retoma pruebas, conserva intentos privados y actualiza la estimación por alcance', async t => {
-  const origin = await startServer(t)
+  const oneDay = 86_400_000
+  let now = Date.parse('2026-11-21T17:00:00Z')
+  const origin = await startServer(t, ':memory:', { clock: () => now })
   const account = { email: 'pruebas@ejemplo.test', password: 'contraseña para pruebas' }
   const student = browserClient(origin)
   const scope = '/estudio/competencias/manipulacion-algebraica'
   const category = '/estudio/categorias/algebra'
   assert.match(await (await student.request(scope)).text(), /Sin evaluar/)
-  assert.equal((await student.post('/perfil/registro', account)).status, 303)
+  const destination = `${category}/pruebas`
+  const signup = `/perfil/registro?volver=${encodeURIComponent(destination)}`
+  assert.match(await (await student.request(destination)).text(), /perfil\?volver=%2Festudio/)
+  assert.equal((await student.post('/perfil/registro', { ...account, volver: destination }, signup)).headers.get('location'), destination)
   assert.match(await (await student.request(scope)).text(), /Iniciar prueba rápida/)
   assert.match(await (await student.request(category)).text(), /48 preguntas · 60–90 min/)
   const picker = await (await student.request(`${category}/pruebas`)).text()
@@ -453,6 +459,7 @@ test('el perfil retoma pruebas, conserva intentos privados y actualiza la estima
   assert.match(html, /9 de 9 respuestas correctas/)
   assert.match(await (await resumed.request(category)).text(), /Cobertura parcial/)
   assert.match(await (await resumed.request('/perfil')).text(), /Pruebas recientes/)
+  assert.equal((await resumed.post(`${scope}/retencion`, {}, scope)).headers.get('location'), `${scope}#dominio`)
 
   const exam = (await resumed.post(`${category}/pruebas/completa`, {}, category)).headers.get('location')
   for (let index = 0; index < 48; index++) {
@@ -470,12 +477,63 @@ test('el perfil retoma pruebas, conserva intentos privados y actualiza la estima
   assert.equal((result.match(/24 de 24 respuestas correctas/g) ?? []).length, 2)
   assert.match(result, /Razonamiento y aplicación/)
   assert.match(result, /Nivel estimado · <strong>Avanzado<\/strong>/)
+  assert.match(result, /En consolidación[\s\S]+0 de 2 competencias firmes/)
   assert.match(await (await resumed.request('/estudio')).text(), /Avanzado/)
   assert.match(await (await resumed.request(scope)).text(), new RegExp(`href="${exam}"`))
+  const modeling = '/estudio/competencias/modelacion-matematica'
+  async function checkRetention(competency, previous = '', correct = true) {
+    const check = (await resumed.post(`${competency}/retencion`, { previous }, competency)).headers.get('location')
+    assert.match(check, /^\/pruebas\//)
+    const issued = []
+    for (let index = 0; index < 2; index++) {
+      const page = await (await resumed.request(check)).text()
+      assert.match(page, new RegExp(`Pregunta ${index + 1} de 2`))
+      const answer = answerOn(page)
+      issued.push(answer.instance)
+      if (!correct) answer.intent = 'skip'
+      assert.equal((await resumed.post(`${check}/responder`, answer, check)).status, 303)
+    }
+    assert.match(await (await resumed.request(check)).text(), correct ? /Comprobación superada/ : /Conviene reforzar/)
+    return { id: check.split('/').at(-1), items: issued }
+  }
+
+  now += oneDay - 1
+  assert.equal((await resumed.post(`${scope}/retencion`, {}, scope)).headers.get('location'), `${scope}#dominio`)
+  now++
+  const firstCheck = await checkRetention(scope)
+  const firstModeling = await checkRetention(modeling)
+  assert.match(await (await resumed.request(scope)).text(), /1 de 2 comprobaciones iniciales superadas/)
+  assert.match(await (await resumed.request(category)).text(), /0 de 2 competencias firmes/)
+  now += 3 * oneDay
+  const secondCheck = await checkRetention(scope, firstCheck.id)
+  assert.ok(secondCheck.items.every(item => !firstCheck.items.includes(item)))
+  assert.match(await (await resumed.request(category)).text(), /1 de 2 competencias firmes/)
+  await checkRetention(modeling, firstModeling.id)
+  assert.match(await (await resumed.request(category)).text(), /Dominio firme<\/strong> · 2 de 2 competencias firmes/)
+  now += 6 * oneDay
+  assert.match(await (await resumed.request(category)).text(), /Toca comprobar/)
+  await checkRetention(scope, secondCheck.id, false)
+  assert.match(await (await resumed.request(scope)).text(), /Dominio · <strong>En práctica<\/strong>/)
+  assert.match(await (await resumed.request(scope)).text(), /Nivel estimado · <strong>Avanzado<\/strong>/)
 
   const outsider = browserClient(origin)
   await outsider.post('/perfil/registro', { ...account, email: 'otra@ejemplo.test' })
   assert.equal((await outsider.request(exam)).status, 404)
+})
+
+test('el gemelo conserva el historial y descarta comprobaciones emitidas antes de tiempo y evidencia antigua', () => {
+  const id = 'resolucion-ecuaciones'
+  const at = '2026-11-21T17:00:00.000Z'
+  const historical = { type: 'completa', completedAt: at, result: { version: 1, competencies: { [id]: { level: 3 } } } }
+  assert.equal(masteryStatus(masteryProfiles([historical])[id], at), 'Pendiente de evidencia autónoma')
+  const complete = { ...historical, result: { competencies: { [id]: { level: 3, autonomous: [
+    { id: 'uno', dimension: 'procedimental', correct: true }, { id: 'dos', dimension: 'conceptual', correct: true },
+    { id: 'tres', dimension: 'aplicacion', correct: true }, { id: 'cuatro', dimension: 'aplicacion', correct: true },
+  ] } } } }
+  const early = { type: 'retencion', scopeId: id, createdAt: at, completedAt: '2026-11-22T18:00:00.000Z', result: { retention: { passed: true } } }
+  const state = masteryProfiles([early, complete])[id]
+  assert.equal(state.checks, 0)
+  assert.equal(masteryStatus(state, early.completedAt), 'Toca comprobar')
 })
 
 test('una solución numérica correcta con justificación incorrecta no acredita esa dificultad', () => {

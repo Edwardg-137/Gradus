@@ -12,8 +12,9 @@ import { credentialsPage, profilePage } from './profile-view.js'
 import { accountOwner, openStore, sessionMaxAge } from './store.js'
 import { studyScope } from './study-content.js'
 import { advanceLesson, lessonKey } from './study-lessons.js'
-import { studyAttemptPage, studyTestOptions } from './study-test-view.js'
-import { competencyLevels, createStudyAttempt, submitStudyAnswer } from './study-tests.js'
+import { masteryProfiles } from './study-mastery.js'
+import { masterySection, studyAttemptPage, studyTestOptions } from './study-test-view.js'
+import { competencyLevels, createRetentionAttempt, createStudyAttempt, submitStudyAnswer } from './study-tests.js'
 import { lessonChooser, lessonPage, studyIndex, studyScopePage } from './study-view.js'
 import { assessmentQuestion, home, initialResult, layout, message } from './views.js'
 
@@ -57,7 +58,7 @@ function notFound(response) {
   return page(response, 'Página no encontrada', message('Página no encontrada', 'El enlace no está disponible.'), 404)
 }
 
-export function createApp({ filename = 'data/gradus.sqlite', secureCookie = false } = {}) {
+export function createApp({ filename = 'data/gradus.sqlite', secureCookie = false, clock = Date.now } = {}) {
   const store = openStore(filename)
   const attemptAuthentication = limitAuth()
   const setCookie = (response, name, value, age = sessionMaxAge) => response.appendHeader('Set-Cookie',
@@ -74,7 +75,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         [item.path, `${item.path}/iniciar`, `${item.path}/responder`].includes(pathname)) ?? []
       const [, moduleId, action] = /^\/modulos\/([a-z-]+)(?:\/(iniciar|responder|variante))?$/.exec(pathname) ?? []
       const module = Object.hasOwn(modules, moduleId) ? modules[moduleId] : null
-      const [, studyKind, studyId, difficulty, lessonMode, tests, testType] = /^\/estudio\/(categorias|competencias)\/([a-z-]+)(?:\/(basico|intermedio|avanzado)(?:\/(rapida|completa))?|(\/pruebas)(?:\/(rapida|completa))?)?$/.exec(pathname) ?? []
+      const [, studyKind, studyId, difficulty, lessonMode, tests, testType, retention] = /^\/estudio\/(categorias|competencias)\/([a-z-]+)(?:\/(basico|intermedio|avanzado)(?:\/(rapida|completa))?|(\/pruebas)(?:\/(rapida|completa))?|\/(retencion))?$/.exec(pathname) ?? []
       const scope = studyScope(studyKind, studyId)
       const [, attemptId, answering] = /^\/pruebas\/([a-f\d-]{36})(\/responder)?$/.exec(pathname) ?? []
       if (request.method === 'GET' && pathname === '/estilos.css') {
@@ -89,10 +90,13 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       const loginId = login ? digest(login) : null
       const data = request.method === 'POST' ? await formData(request) : null
       const account = loginId ? store.accountForSession(loginId) : null
+      const at = new Date(clock()).toISOString()
       const owner = account ? accountOwner(account.id) : guest
       const token = digest(`gradus-form:${account ? login : guest}`)
       const registering = pathname === '/perfil/registro'
       const credentialRoute = registering || pathname === '/perfil/entrar'
+      const returnPath = (data ?? searchParams).get('volver')
+      const destination = /^\/estudio\/(categorias|competencias)\/[a-z-]+\/pruebas$/.test(returnPath ?? '') ? returnPath : null
 
       if (request.method === 'GET') {
         if (!cookies[guestCookie]) setCookie(response, guestCookie, guest)
@@ -101,13 +105,17 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         if (pathname === '/') return page(response, 'Inicio', home(progress, token, account))
         if (pathname === '/perfil' || pathname === '/estudio' || (scope && !difficulty)) {
           const attempts = account ? store.studyAttempts(account.id) : []
-          if (pathname === '/perfil') return page(response, 'Mi perfil', profilePage(account, token, attempts))
+          if (pathname === '/perfil') return account && destination ? redirect(response, destination)
+            : page(response, 'Mi perfil', profilePage(account, token, attempts, destination))
           const levels = competencyLevels(attempts)
-          if (pathname === '/estudio') return page(response, 'Estudio', studyIndex(levels))
+          const profiles = masteryProfiles(attempts)
+          if (pathname === '/estudio') return page(response, 'Estudio', studyIndex(levels, profiles, at))
           if (testType) return redirect(response, `${scope.path}/pruebas`)
+          if (retention) return redirect(response, `${scope.path}#dominio`)
           const options = studyTestOptions(scope, account, attempts, token)
           if (tests) return page(response, 'Elige una prueba', `<p><a href="${scope.path}">${scope.title}</a></p><h1>Elige una prueba</h1>${options}`)
-          return page(response, scope.title, studyScopePage(scope, levels, options))
+          const mastery = masterySection(scope, profiles, attempts, token, at)
+          return page(response, scope.title, studyScopePage(scope, levels, options, mastery, profiles, at))
         }
         if (scope && difficulty) {
           const body = lessonMode ? lessonPage(scope, difficulty, lessonMode,
@@ -117,11 +125,17 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         if (attemptId && !answering) {
           if (!account) return redirect(response, '/perfil')
           const attempt = store.readAttempt(account.id, attemptId)
-          return attempt ? page(response, 'Prueba', studyAttemptPage(attempt, token)) : notFound(response)
+          if (!attempt) return notFound(response)
+          let mastery = ''
+          if (attempt.completedAt) {
+            const attempts = store.studyAttempts(account.id)
+            mastery = masterySection(studyScope(attempt.kind, attempt.scopeId), masteryProfiles(attempts), attempts, token, at)
+          }
+          return page(response, 'Prueba', studyAttemptPage(attempt, token, undefined, mastery))
         }
         if (credentialRoute) {
-          if (account) return redirect(response, '/perfil')
-          return page(response, registering ? 'Crear perfil' : 'Iniciar sesión', credentialsPage(registering, token))
+          if (account) return redirect(response, destination ?? '/perfil')
+          return page(response, registering ? 'Crear perfil' : 'Iniciar sesión', credentialsPage(registering, token, { destination }))
         }
         if (pathname === assessment?.path) {
           const block = progress[blockKey]
@@ -158,10 +172,10 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         return redirect(response, '/perfil')
       }
       if (credentialRoute) {
-        if (account) return redirect(response, '/perfil')
+        if (account) return redirect(response, destination ?? '/perfil')
         const { email, password, error } = credentials(data)
         const failure = (status, error) => page(response, registering ? 'Crear perfil' : 'Iniciar sesión',
-          credentialsPage(registering, token, { email, error }), status)
+          credentialsPage(registering, token, { email, error, destination }), status)
         if (error) return failure(422, error)
         const secret = newSecret()
         const accepted = await attemptAuthentication(request.socket.remoteAddress, async () => {
@@ -179,7 +193,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
           ? failure(409, 'Ese correo ya tiene un perfil. Puedes iniciar sesión.')
           : failure(401, 'Revisa tu correo y contraseña.')
         setCookie(response, authCookie, secret)
-        return redirect(response, '/perfil')
+        return redirect(response, destination ?? '/perfil')
       }
       if (scope && difficulty) {
         if (!lessonMode) return redirect(response, pathname)
@@ -190,15 +204,25 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       }
       if (scope && testType) {
         if (!account) return redirect(response, '/perfil')
-        const attempt = store.beginAttempt(account.id, scope, testType, data.get('previous') ?? '', createStudyAttempt)
+        const attempt = store.beginAttempt(account.id, scope, testType, data.get('previous') ?? '',
+          (target, type, count) => createStudyAttempt(target, type, count, at))
         return redirect(response, attempt ? `/pruebas/${attempt}` : scope.path)
+      }
+      if (scope?.kind === 'competencias' && retention) {
+        if (!account) return redirect(response, '/perfil')
+        const attempt = store.beginAttempt(account.id, scope, 'retencion', data.get('previous') ?? '', () => {
+          const attempts = store.studyAttempts(account.id)
+          const due = masteryProfiles(attempts)[scope.id]?.nextCheckAt
+          return due && due <= at ? createRetentionAttempt(scope, attempts, at) : null
+        })
+        return redirect(response, attempt ? `/pruebas/${attempt}` : `${scope.path}#dominio`)
       }
       if (attemptId && answering) {
         if (!account) return redirect(response, '/perfil')
         const value = data.get('answer') ?? ''
         const reasoningValue = data.get('reasoning') ?? ''
         const result = store.updateAttempt(account.id, attemptId, attempt =>
-          submitStudyAnswer(attempt, data.get('instance'), value, data.get('intent') === 'skip', reasoningValue))
+          submitStudyAnswer(attempt, data.get('instance'), value, data.get('intent') === 'skip', reasoningValue, at))
         if (!result) return notFound(response)
         if (result.conflict) throw new RequestError(409, 'Abre la prueba para recuperar la pregunta actual.')
         if (result.error) return page(response, 'Prueba', studyAttemptPage(result.attempt, token, { value, reasoningValue, error: result.error }), 422)

@@ -1,22 +1,22 @@
 import { categories, competencies, difficulties, studyScope } from './study-content.js'
 import { lessonModes } from './study-lessons.js'
 import { scopeLevel } from './study-tests.js'
-import { studyLevel } from './study-test-view.js'
+import { masteryLine, studyLevel } from './study-test-view.js'
 import { escape, feedback, form, link, questionForm } from './views.js'
 
-export function studyIndex(current) {
+export function studyIndex(current, profiles, at) {
   return `<h1>Estudio</h1><p>Explora las categorías de Matemáticas y practica por dificultad.</p>
     ${Object.keys(categories).map(id => {
       const category = studyScope('categorias', id)
       return `<section><h2><a href="${category.path}">${category.title}</a></h2>
-        ${studyLevel(scopeLevel(category, current))}
-        <ul>${category.competencies.map(competencyId => competencyLink(competencyId, current)).join('')}</ul></section>`
+        ${studyLevel(scopeLevel(category, current))}${masteryLine(category, profiles, at)}
+        <ul>${category.competencies.map(competencyId => competencyLink(competencyId, current, profiles, at)).join('')}</ul></section>`
     }).join('')}`
 }
 
-function competencyLink(id, current) {
+function competencyLink(id, current, profiles, at) {
   const competency = studyScope('competencias', id)
-  return `<li><a href="${competency.path}">${competency.title}</a>${studyLevel(current[id])}</li>`
+  return `<li><a href="${competency.path}">${competency.title}</a>${studyLevel(current[id])}${masteryLine(competency, profiles, at)}</li>`
 }
 
 function lessonLinks(scope) {
@@ -24,13 +24,13 @@ function lessonLinks(scope) {
     `<li><a href="${scope.path}/${difficulty}">${scope.title} · ${label}</a></li>`).join('')}</ul></section>`
 }
 
-export function studyScopePage(scope, current, tests) {
+export function studyScopePage(scope, current, tests, mastery, profiles, at) {
   const intro = scope.kind === 'categorias'
     ? `<p><a href="/estudio">Matemáticas</a></p><h1>${scope.title}</h1>
-      ${studyLevel(scopeLevel(scope, current))}
-      <h2>Competencias</h2><ul>${scope.competencies.map(id => competencyLink(id, current)).join('')}</ul>`
+      ${studyLevel(scopeLevel(scope, current))}${mastery}
+      <h2>Competencias</h2><ul>${scope.competencies.map(id => competencyLink(id, current, profiles, at)).join('')}</ul>`
     : `<p><a href="/estudio/categorias/${scope.category}">${categories[scope.category].title}</a></p>
-      <h1>${scope.title}</h1><p>${escape(scope.description)}</p>${studyLevel(current[scope.id])}`
+      <h1>${scope.title}</h1><p>${escape(scope.description)}</p>${studyLevel(current[scope.id])}${mastery}`
   return `${intro}${tests}${lessonLinks(scope)}`
 }
 

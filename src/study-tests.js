@@ -20,13 +20,29 @@ const levels = ['Inicial', 'En desarrollo', 'Funcional', 'Avanzado']
 const confidenceLevels = ['baja', 'media', 'alta']
 const bands = Object.keys(difficulties)
 
-export function createStudyAttempt(scope, type, sequence) {
+function snapshot(scope, type, questions, at) {
+  return { id: randomUUID(), kind: scope.kind, scopeId: scope.id, type, createdAt: at,
+    completedAt: null, version: 2, questions, answers: {}, result: null }
+}
+
+export function createStudyAttempt(scope, type, sequence, at = new Date().toISOString()) {
   // shortcut: Los parámetros se reciclan tras 12 pruebas, ampliar el banco para recorridos más largos.
   const parameter = 6 + (sequence % 12) * 2
   const questions = bands.flatMap(difficulty => scope.competencies.flatMap(id =>
     testTypes[type].plan.map((template, index) => testQuestion(id, difficulty, template, parameter + Number(index >= 4), randomInt(3)))))
-  return { id: randomUUID(), kind: scope.kind, scopeId: scope.id, type, createdAt: new Date().toISOString(),
-    completedAt: null, version: 2, questions, answers: {}, result: null }
+  return snapshot(scope, type, questions, at)
+}
+
+export function createRetentionAttempt(scope, attempts, at) {
+  const earlier = attempts.filter(attempt => attempt.type === 'retencion' && attempt.scopeId === scope.id && attempt.completedAt)
+  const used = new Set(earlier.flatMap(attempt => attempt.result.retention.items))
+  const procedure = earlier.length % 2 ? 2 : 4
+  // shortcut: El banco reserva 48 rondas inéditas por competencia, añadir más familias antes de agotarlas.
+  for (let parameter = 32; parameter <= 79; parameter++) {
+    const questions = [testQuestion(scope.id, 'avanzado', procedure, parameter), testQuestion(scope.id, 'avanzado', 7, parameter, randomInt(3))]
+    if (questions.every(question => !used.has(question.id))) return snapshot(scope, 'retencion', questions, at)
+  }
+  return null
 }
 
 export function nextStudyQuestion(attempt) {
@@ -59,10 +75,13 @@ function diagnose(type, version, questions, answers) {
   const totals = tally(questions, answers)
   const inconsistent = firstGap !== -1 && bands.slice(firstGap + 1).some(difficulty => breakdown[difficulty].meets)
   const confidence = type === 'rapida' || !sufficient ? 0 : totals.answered >= rule.plan.length * 3 - 3 && !inconsistent ? 2 : 1
-  return { level, confidence, totals, breakdown, recommendedDifficulty: bands[firstGap] ?? 'avanzado' }
+  const autonomous = type === 'completa' && version >= 2 ? questions.filter(question => question.difficulty === 'avanzado')
+    .map(question => ({ id: question.id, dimension: question.dimension, correct: answers[question.id].outcome === 'correct' })) : null
+  return { level, confidence, totals, breakdown, recommendedDifficulty: bands[firstGap] ?? 'avanzado',
+    ...(autonomous && { autonomous }) }
 }
 
-export function submitStudyAnswer(attempt, instance, value, unknown, reasoningValue) {
+export function submitStudyAnswer(attempt, instance, value, unknown, reasoningValue, date = new Date().toISOString()) {
   if (Object.hasOwn(attempt.answers, instance) || attempt.completedAt) return {}
   const question = nextStudyQuestion(attempt)
   if (question?.id !== instance) return { conflict: true }
@@ -76,22 +95,27 @@ export function submitStudyAnswer(attempt, instance, value, unknown, reasoningVa
     answer.reasonCorrect = reasoning.outcome === 'correct'
     if (!answer.reasonCorrect) answer.outcome = 'incorrect'
   }
-  const date = new Date().toISOString()
   attempt.answers[instance] = { ...answer, date }
   if (nextStudyQuestion(attempt)) return { changed: true }
 
+  attempt.completedAt = date
+  if (attempt.type === 'retencion') {
+    const totals = tally(attempt.questions, attempt.answers)
+    attempt.result = { version: 2, retention: { ...totals, passed: totals.correct === totals.total,
+      items: attempt.questions.map(question => question.id) } }
+    return { changed: true }
+  }
   const ids = new Set(attempt.questions.map(item => item.competencyId))
   const evidence = Object.fromEntries(Array.from(ids, id =>
     [id, diagnose(attempt.type, attempt.version, attempt.questions.filter(item => item.competencyId === id), attempt.answers)]))
   attempt.result = { version: attempt.version, competencies: evidence }
-  attempt.completedAt = date
   return { changed: true }
 }
 
 export function competencyLevels(attempts) {
   const current = {}
   for (const attempt of attempts) {
-    if (!attempt.result) continue
+    if (!attempt.result?.competencies) continue
     for (const [id, result] of Object.entries(attempt.result.competencies)) {
       const previous = current[id]
       const weight = result.level === null ? 0 : attempt.type === 'completa' ? 2 : 1

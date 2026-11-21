@@ -123,6 +123,7 @@ export function openStore(filename) {
         if (latest && (!latest.completedAt || latest.id !== previous)) return latest.id
         if (!latest && previous) return null
         const attempt = create(scope, type, countAttempts.get(accountId).count)
+        if (!attempt) return null
         insertAttempt.run(attempt.id, accountId, scope.kind, scope.id, type, attempt.createdAt, attemptResponses(attempt))
         return attempt.id
       })
