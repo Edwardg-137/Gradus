@@ -32,7 +32,6 @@ function overview(title, path, progress) {
     '/catalogo': ['Cuaderno de estudio', 'Cursos y práctica'],
     '/historial': ['Matemáticas', 'Mi progreso'],
     '/perfil': ['Gradus', 'Mi espacio'],
-    '/pitch': ['Pitch de Gradus', 'De básico a diversificado'],
   }
   const current = sectionPath(path)
   const diagnostic = path === '/' || /^\/(evaluacion|reevaluacion|resultado)(\/|$)/.test(path)
@@ -85,7 +84,7 @@ function deskTools(storageKey, allowNote) {
   </aside>`
 }
 
-export function layout(title, body, { pathname = '/', progress, storageKey, testing = false } = {}) {
+export function layout(title, body, { pathname = '/', progress, storageKey, testing = false, courseNavigation } = {}) {
   const current = sectionPath(pathname)
   return `<!doctype html>
 <html lang="es">
@@ -99,14 +98,14 @@ export function layout(title, body, { pathname = '/', progress, storageKey, test
 </head>
 <body>
   <a class="skip" href="#contenido">Ir al contenido</a>
-  <header class="masthead">
+  <header class="masthead${courseNavigation ? ' course-masthead' : ''}">
     <a class="brand" href="/"${pathname === '/' ? ' aria-current="page"' : ''}>Gradus</a>
-    <nav aria-label="Principal">${destinations.map(([url, label]) => `<a href="${url}"${url === current
-      ? ` aria-current="${url === pathname ? 'page' : 'location'}"` : ''}>${label}</a>`).join('')}</nav>
+    ${courseNavigation ? '' : `<nav aria-label="Principal">${destinations.map(([url, label]) => `<a href="${url}"${url === current
+      ? ` aria-current="${url === pathname ? 'page' : 'location'}"` : ''}>${label}</a>`).join('')}</nav>`}
   </header>
-  <main id="contenido" class="desk" tabindex="-1">
-    <div class="notebook">${overview(title, pathname, progress)}
-      <div class="leaf working">${diagnosticTabs(pathname, progress)}${body}</div></div>
+  <main class="desk${courseNavigation ? ' course-desk' : ''}"${courseNavigation ? '' : ' id="contenido" tabindex="-1"'}>
+    <div class="notebook">${courseNavigation ?? overview(title, pathname, progress)}
+      <div class="leaf working"${courseNavigation ? ' id="contenido" tabindex="-1"' : ''}>${diagnosticTabs(pathname, progress)}${body}</div></div>
     ${storageKey ? deskTools(storageKey, !testing) : ''}
   </main>
 </body>

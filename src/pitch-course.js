@@ -100,20 +100,21 @@ export function pitchUrl(run, scene, options = {}) {
   return `/pitch?${escape(query.toString())}`
 }
 
-function questionField(name, question, value = '', error = '') {
+function questionField(name, question, value = '', error = '', position = 0) {
   const invalid = error ? ` aria-invalid="true" aria-describedby="pitch-error-${name}"` : ''
   const inputs = question.format === 'choice'
     ? Object.entries(question.options).map(([id, label]) => `<label class="option"><input required type="radio" name="${name}" value="${id}"${id === value ? ' checked' : ''}${invalid}> ${escape(label)}</label>`).join('')
     : `<label class="number">${question.answerLabel} <input name="${name}" maxlength="28" value="${escape(value)}" required${invalid}></label>`
-  return `<fieldset><legend>${escape(question.prompt)}</legend>${inputs}${error ? `<p class="error" id="pitch-error-${name}">${escape(error)}</p>` : ''}</fieldset>`
+  return `<fieldset><legend>${position ? `<span>Pregunta ${position}</span>` : ''}${escape(question.prompt)}</legend>${inputs}${error ? `<p class="error" id="pitch-error-${name}">${escape(error)}</p>` : ''}</fieldset>`
 }
 
 export function pitchForm(run, scene, problems, marked, submit, options = {}) {
   const cutoff = proofOrder.indexOf(Object.keys(problems)[0])
   const hidden = Object.fromEntries(proofOrder.slice(0, cutoff).filter(name => run.answers[name]).map(name => [name, run.answers[name]]))
-  return `<form method="get" action="/pitch">${Object.entries({ escena: scene, ...hidden, ...options }).map(([name, value]) =>
+  const exam = scene === 'examen'
+  return `<form method="get" action="/pitch"${exam ? ' class="course-exam"' : ''}>${Object.entries({ escena: scene, ...hidden, ...options }).map(([name, value]) =>
     `<input type="hidden" name="${name}" value="${escape(value)}">`).join('')}
-    ${Object.entries(problems).map(([name, problem]) => questionField(name, problem, run.answers[name], marked[name]?.error)).join('')}
+    ${Object.entries(problems).map(([name, problem], index) => questionField(name, problem, run.answers[name], marked[name]?.error, exam ? index + 1 : 0)).join('')}
     <button>${submit}</button></form>`
 }
 
@@ -141,13 +142,15 @@ export function modulePage(run, id) {
   const back = `<p><a href="${pitchUrl(run, 'ruta')}">Volver al mapa</a></p>`
   if (id !== 'integracion') {
     const review = id === 'distributiva' && !run.reviewDone
-    return `<p>${moduleStatus(id, run)}</p><p>${unit.concept}</p><h2>Ejemplo resuelto</h2><p>${unit.example}</p>
+    return `<p class="course-status">${moduleStatus(id, run)}</p><p>${unit.concept}</p>
+      <section class="course-example"><h2>Ejemplo resuelto</h2><p>${unit.example}</p></section>
       <details><summary>Evidencia de Lucía en esta unidad</summary><p>${unit.evidence}</p></details>
       ${review ? `<p>${link(pitchUrl(run, 'repaso'), 'Hacer el repaso asignado')}</p>` : ''}${back}`
   }
-  if (!run.reviewDone) return `<p class="pitch-callout">Gradus adelantó el repaso de distributiva. Completa un ejercicio nuevo sin pista para abrir este módulo.</p>
-    <p>${link(pitchUrl(run, 'repaso'), 'Ir al repaso asignado')}</p>${back}`
-  return `<p>${context}</p>${run.courseDone ? `<h2>Actividad integradora superada</h2>
+  if (!run.reviewDone) return `<p class="course-status">Repaso previo pendiente</p>
+    <p>Completa un ejercicio nuevo sin pista para abrir este módulo.</p>
+    <p>${link(pitchUrl(run, 'practica'), 'Ir a Práctica')}</p>${back}`
+  return `<div class="course-example"><p>${context}</p></div>${run.courseDone ? `<h2>Actividad integradora superada</h2>
     ${Object.entries(integrator).map(([name, problem]) => `<p><strong>${escape(problem.prompt)}</strong></p>${pitchFeedback(problem, run.activity[name])}`).join('')}
     <p>${link(pitchUrl(run, 'examen'), 'Presentar examen final')}</p>` : `${Object.values(run.activity).some(response => response?.outcome === 'incorrect')
       ? '<p class="error" role="alert">Revisa cuántas veces se paga el forro y cuántas veces se paga el envío. Inténtalo de nuevo.</p>' : ''}

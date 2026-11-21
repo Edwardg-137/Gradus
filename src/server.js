@@ -87,7 +87,11 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
         return response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' }).end(deskScript)
       }
       if (request.method === 'GET' && pathname === '/favicon.ico') return response.writeHead(204).end()
-      if (request.method === 'GET' && pathname === '/pitch') return page(response, 'Presentación de Gradus', pitchPage(searchParams))
+      if (request.method === 'GET' && pathname === '/pitch') {
+        const course = pitchPage(searchParams)
+        desk.courseNavigation = course.navigation
+        return page(response, course.title, course.body)
+      }
 
       const matches = (request.headers.cookie ?? '').matchAll(/(?:^|;\s*)(gradus_guest|gradus_auth)=([0-9a-f]{64})(?=;|$)/g)
       const cookies = Object.fromEntries(Array.from(matches, ([, name, value]) => [name, value]))
