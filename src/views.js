@@ -10,15 +10,31 @@ export function layout(title, body) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#f0e8d8">
   <title>${escape(title)} · Gradus</title>
   <link rel="stylesheet" href="/estilos.css">
 </head>
 <body>
   <a class="skip" href="#contenido">Ir al contenido</a>
-  <header><nav aria-label="Principal"><a class="brand" href="/">Gradus</a>
-    <a href="/estudio">Estudio</a><a href="/catalogo">Catálogo</a><a href="/historial">Mi historial</a><a href="/perfil">Mi perfil</a></nav></header>
-  <main id="contenido" tabindex="-1">${body}</main>
+  <div class="station">
+    <aside class="rail" aria-label="Estación de estudio">
+      <a class="brand" href="/" aria-label="Gradus, inicio"><span class="brand-mark">g.</span><span>gradus<small>ESTACIÓN DE ESTUDIO</small></span></a>
+      <p class="rail-label">TU ESPACIO</p>
+      <nav aria-label="Principal" class="rail-nav">
+        <a href="/" class="nav-link"><span class="nav-icon" aria-hidden="true">⌂</span>Inicio</a>
+        <a href="/estudio" class="nav-link"><span class="nav-icon" aria-hidden="true">✎</span>Estudio</a>
+        <a href="/catalogo" class="nav-link"><span class="nav-icon" aria-hidden="true">▤</span>Catálogo</a>
+        <a href="/historial" class="nav-link"><span class="nav-icon" aria-hidden="true">◷</span>Mi historial</a>
+      </nav>
+      <div class="rail-bottom"><span class="lamp" aria-hidden="true"></span><span>Un paso a la vez<small>Tu espacio, a tu ritmo</small></span></div>
+      <a href="/perfil" class="profile-link"><span class="avatar" aria-hidden="true">✦</span>Mi perfil <span aria-hidden="true">↗</span></a>
+    </aside>
+    <div class="workspace">
+      <header class="topbar"><div class="breadcrumb"><span>MATEMÁTICAS</span><b aria-hidden="true">/</b><span>ÁLGEBRA</span></div><a class="top-profile" href="/perfil"><span class="avatar" aria-hidden="true">✦</span><span>Mi perfil</span><span aria-hidden="true">⌄</span></a></header>
+      <main id="contenido" tabindex="-1">${body}</main>
+      <footer class="desk-footer"><span>GRADUS <span aria-hidden="true">✳</span> APRENDE A TU RITMO</span><a href="/estudio">Volver a tu espacio ↗</a></footer>
+    </div>
+  </div>
 </body>
 </html>`
 }
@@ -37,13 +53,26 @@ export function home(progress, token, account) {
   else if (progress.followUp) action = link('/reevaluacion', 'Retomar mi reevaluación')
   else if (progress.initial?.result) action = link('/resultado', 'Ver mi resultado')
   else if (progress.initial) action = link('/evaluacion', 'Retomar mi evaluación')
-  return `<p class="muted">${topic.area} / ${topic.domain}</p>
-  <h1>${topic.title}</h1>
-  <p>Descubre qué habilidades has demostrado y qué puedes practicar a continuación.</p>
-  <ul><li>${skills.igualdad} con preguntas de selección múltiple.</li>
-  <li>${skills.resolucion} escribiendo el valor de x.</li></ul>
-  <p>${account ? 'Tu avance se guarda en tu perfil.' : 'Tu sesión de invitado se guarda en este navegador.'}</p>
-  <p>${link('/estudio/categorias/ecuaciones/pruebas', 'Elegir una prueba')}</p>${action}`
+  const hasStarted = Boolean(progress.initial || progress.followUp)
+  const heading = hasStarted ? 'Qué bueno verte de nuevo.' : 'Tu próxima idea empieza aquí.'
+  const stage = progress.followUp?.result ? 'RECORRIDO COMPLETADO' : progress.initial?.result ? 'SIGUIENTE PASO' : hasStarted ? 'SESIÓN EN CURSO' : 'TU MESA DE ESTUDIO'
+  return `<section class="hero desk-hero">
+    <div class="hero-copy"><p class="eyebrow"><span class="eyebrow-dot"></span>${stage} <span class="eyebrow-separator">·</span>${topic.area} / ${topic.domain}</p>
+      <h1>${heading}</h1><p class="hero-lede">${hasStarted ? 'Retoma donde lo dejaste y sigue construyendo sobre lo que ya sabes.' : 'Prepara tu espacio, mide lo que ya sabes y descubre el siguiente paso.'}</p>
+      <div class="hero-actions">${action}<a class="text-link" href="/estudio">Explorar estudio <span aria-hidden="true">↗</span></a></div>
+      <p class="save-note"><span aria-hidden="true">◉</span>${account ? 'Tu avance está guardado en tu perfil.' : 'Tu sesión se guarda en este navegador.'}</p>
+    </div>
+    <div class="hero-art" aria-hidden="true"><div class="sun-disc"></div><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit-dot"></div><div class="book book-back"></div><div class="book book-front"><span>ALG</span><b>x + 4 = 10</b><i>UNA IDEA A LA VEZ</i></div><span class="art-star star-one">✳</span><span class="art-star star-two">✦</span><span class="art-note">APUNTES<br><b>01 / 04</b></span></div>
+    <span class="hero-index" aria-hidden="true">G—01</span>
+  </section>
+  <section class="section-block journey-section"><div class="section-heading"><div><p class="eyebrow">RUTA DE APRENDIZAJE</p><h2>Una mesa, muchas posibilidades.</h2></div><span class="section-index">01 — 03</span></div>
+    <div class="journey-grid">
+      <a class="journey-card journey-card-primary" href="/estudio"><span class="card-kicker">01 <span>·</span> APRENDE</span><span class="card-illustration notebook-illustration" aria-hidden="true"><i></i><i></i><i></i><b>∑</b></span><h3>Explora y practica</h3><p>Conceptos breves, ejemplos resueltos y ejercicios por dificultad.</p><span class="card-link">Ir a Estudio <b aria-hidden="true">↗</b></span></a>
+      <a class="journey-card" href="/catalogo"><span class="card-kicker">02 <span>·</span> DESCUBRE</span><span class="card-illustration books-illustration" aria-hidden="true"><i></i><i></i><i></i><b>✦</b></span><h3>Encuentra tu curso</h3><p>Lecciones cortas organizadas por habilidad y tema.</p><span class="card-link">Ver catálogo <b aria-hidden="true">↗</b></span></a>
+      <a class="journey-card" href="/historial"><span class="card-kicker">03 <span>·</span> AVANZA</span><span class="card-illustration chart-illustration" aria-hidden="true"><i></i><i></i><i></i><b>↗</b></span><h3>Mira cuánto has crecido</h3><p>Compara resultados y conserva la evidencia de tu progreso.</p><span class="card-link">Abrir historial <b aria-hidden="true">↗</b></span></a>
+    </div>
+  </section>
+  <section class="practice-strip"><span class="strip-icon" aria-hidden="true">✎</span><div><p class="eyebrow">EN TU CUADERNO</p><h2>Hoy podrías empezar con una sola pregunta.</h2><p>Sin prisa. La práctica guarda tu lugar.</p></div><a class="button secondary" href="/estudio/categorias/ecuaciones/pruebas">Elegir una prueba <span aria-hidden="true">→</span></a></section>`
 }
 
 function radioOptions(options, name, value, invalid) {
