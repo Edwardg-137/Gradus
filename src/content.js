@@ -79,3 +79,16 @@ export const modules = {
     ],
   },
 }
+
+export const courses = {
+  'ecuaciones-desde-la-igualdad': {
+    title: 'Ecuaciones lineales desde la igualdad',
+    objective: 'Elige operaciones que conservan la igualdad y calcula el valor de la incógnita.',
+    modules: ['mantener-igualdad', 'despejar-incognita'],
+  },
+  'ecuaciones-en-situaciones-cotidianas': {
+    title: 'Ecuaciones en situaciones cotidianas',
+    objective: 'Resuelve una ecuación que describe un pedido e interpreta la solución en unidades.',
+    modules: ['cantidad-desconocida'],
+  },
+}

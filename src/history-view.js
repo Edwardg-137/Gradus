@@ -38,7 +38,7 @@ export function history(progress) {
       ${assessmentSummary('Antes', initial, id)}${assessmentSummary('Después', followUp, id)}</div>${change}</section>`
   }).join('')}
   ${followUp?.result ? `<section><h2>Insignia</h2>${badge
-    ? `<h3>Avance en ecuaciones lineales</h3><p>Estas habilidades pasaron de En desarrollo a Demostrada en la reevaluación.</p>
+    ? `<h3>Avance en ecuaciones lineales</h3><p>Pasaste de «En desarrollo» a «Demostrada en esta evaluación» en ${badge.evidence.length === 1 ? 'esta habilidad' : 'ambas habilidades'}.</p>
     <ul>${badge.evidence.map(item => `<li><a href="#${item.skill}">Ver evidencia de ${skills[item.skill].toLowerCase()}</a></li>`).join('')}</ul>`
     : '<p>Pendiente. Se obtiene al pasar de En desarrollo a Demostrada en al menos una habilidad.</p>'}</section>` : ''}
   ${practice.length ? `<section><h2>Módulos practicados</h2><ul>${practice.map(([id, activity]) => {
@@ -46,5 +46,6 @@ export function history(progress) {
     return `<li><a href="/modulos/${id}">${escape(modules[id].title)}</a> · ${completed}
       ${completed === 1 ? 'ronda completada' : 'rondas completadas'}</li>`
   }).join('')}</ul></section>` : ''}
-  ${followUp?.result ? recommendation(followUp.result) : `<p>${link('/resultado', 'Volver a mi resultado')}</p>`}`
+  ${followUp?.result ? `${recommendation(followUp.result)}<p><a href="/resultado">Ver evaluación inicial</a></p>`
+    : `<p>${link('/resultado', 'Volver a mi resultado')}</p>`}`
 }

@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
+import { mkdtemp, rmdir, unlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import { assessments, grade, newBlock, nextQuestion, progressBadge, recordAnswer } from '../src/assessment.js'
 import { followUp, initial, modules } from '../src/content.js'
@@ -15,8 +18,8 @@ async function startServer(t, filename = ':memory:') {
   return `http://127.0.0.1:${server.address().port}`
 }
 
-async function guest(origin, cookie) {
-  const response = await fetch(`${origin}/`, { headers: cookie ? { Cookie: cookie } : {} })
+async function guest(origin, cookie, page = '/') {
+  const response = await fetch(`${origin}${page}`, { headers: cookie ? { Cookie: cookie } : {} })
   cookie ??= response.headers.get('set-cookie').split(';')[0]
   const token = /name="token" value="([^"]+)"/.exec(await response.text())?.[1]
   const get = path => fetch(`${origin}${path}`, { headers: { Cookie: cookie } })
@@ -193,4 +196,47 @@ test('la insignia agrupa mejoras y distingue la evidencia nueva y los estados qu
   progress.followUp = finishedBlock(assessments.followUp, ['izquierda', 'ambos', '15', '4'])
   assert.equal(progressBadge(progress), null)
   assert.match(history(progress), /Aumentaron los aciertos y el estado se mantiene/)
+})
+
+test('el catálogo abre los dos cursos y sus módulos', async t => {
+  const student = await guest(await startServer(t))
+  const catalog = await (await student.get('/catalogo')).text()
+  const courses = [...catalog.matchAll(/href="(\/cursos\/[^"/]+)"/g)].map(match => match[1])
+  assert.equal(courses.length, 2)
+  const seen = []
+  for (const course of courses) {
+    const response = await student.get(course)
+    assert.equal(response.status, 200)
+    const page = await response.text()
+    assert.match(page, /<h2>Módulos<\/h2>/)
+    for (const [, path, id] of page.matchAll(/href="(\/modulos\/([a-z-]+))"/g)) {
+      const module = await student.get(path)
+      assert.equal(module.status, 200)
+      assert.ok((await module.text()).includes(`<h1>${modules[id].title}</h1>`))
+      seen.push(id)
+    }
+  }
+  assert.deepEqual(seen.sort(), Object.keys(modules).sort())
+})
+
+test('la sesión de invitado se recupera después de reiniciar el servidor', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'gradus-test-'))
+  const filename = join(directory, 'session.sqlite')
+  t.after(async () => {
+    await unlink(filename)
+    await rmdir(directory)
+  })
+  let cookie
+  await t.test('guardar una respuesta', async phase => {
+    const student = await guest(await startServer(phase, filename))
+    cookie = student.cookie
+    await student.post('/evaluacion/iniciar')
+    assert.equal((await student.answer('i-aditiva', 'ambos')).status, 303)
+  })
+  await t.test('retomar y guardar la siguiente', async phase => {
+    const student = await guest(await startServer(phase, filename), cookie, '/evaluacion')
+    assert.match(await (await student.get('/evaluacion')).text(), /Pregunta 2 de 4/)
+    assert.equal((await student.answer('i-multiplicativa', 'ambos')).status, 303)
+    assert.match(await (await student.get('/evaluacion')).text(), /Pregunta 3 de 4/)
+  })
 })

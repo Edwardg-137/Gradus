@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
 import { assessments, canStartFollowUp, newBlock, nextQuestion, progressBadge, recordAnswer } from './assessment.js'
-import { modules } from './content.js'
+import { catalog, coursePage } from './catalog-view.js'
+import { courses, modules } from './content.js'
 import { history } from './history-view.js'
 import { answerExercise, findExercise, issueVariant, offersVariants, pendingExercise, startRound } from './practice.js'
 import { practicePage } from './practice-view.js'
@@ -66,6 +67,7 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
       if (request.method === 'GET' && pathname === '/estilos.css') {
         return response.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' }).end(css)
       }
+      if (request.method === 'GET' && pathname === '/favicon.ico') return response.writeHead(204).end()
 
       const cookie = request.headers.cookie?.match(/(?:^|;\s*)gradus_guest=([0-9a-f]{64})(?=;|$)/)?.[1]
       const session = cookie ?? randomBytes(32).toString('hex')
@@ -88,6 +90,12 @@ export function createApp({ filename = 'data/gradus.sqlite', secureCookie = fals
           return page(response, 'Tu punto de partida', initialResult(progress, token))
         }
         if (pathname === '/historial') return page(response, 'Mi historial', history(progress))
+        if (pathname === '/catalogo') return page(response, 'Catálogo de cursos', catalog(progress.initial?.result))
+        const courseId = /^\/cursos\/([a-z-]+)$/.exec(pathname)?.[1]
+        if (Object.hasOwn(courses, courseId)) {
+          const course = courses[courseId]
+          return page(response, course.title, coursePage(course))
+        }
         if (module && !action) {
           const practice = progress.practice?.[moduleId]
           const selected = findExercise(practice, searchParams.get('ejercicio'))

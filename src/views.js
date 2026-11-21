@@ -16,8 +16,9 @@ export function layout(title, body) {
 </head>
 <body>
   <a class="skip" href="#contenido">Ir al contenido</a>
-  <header><nav aria-label="Principal"><a class="brand" href="/">Gradus</a></nav></header>
-  <main id="contenido">${body}</main>
+  <header><nav aria-label="Principal"><a class="brand" href="/">Gradus</a>
+    <a href="/catalogo">Catálogo</a><a href="/historial">Mi historial</a></nav></header>
+  <main id="contenido" tabindex="-1">${body}</main>
 </body>
 </html>`
 }
